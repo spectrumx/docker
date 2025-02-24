@@ -1,0 +1,7 @@
+services:
+  fft:
+    image: fft
+    container_name: fft
+    network_mode: host
+    volumes:
+      - /data/ringbuffer:/data/ringbuffer
