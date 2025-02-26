@@ -1,0 +1,7 @@
+services:
+  icarus:
+    build:
+      context: /opt/radiohound/icarus
+      dockerfile: /opt/radiohound/docker/icarus/Dockerfile
+    container_name: icarus
+    network_mode: host
