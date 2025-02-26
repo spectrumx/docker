@@ -1,0 +1,46 @@
+version: '3'
+services:
+  icarus:
+    build: /opt/radiohound/icarus
+    network_mode: "host"
+    container_name: "icarus"
+    restart: unless-stopped
+
+  mqtt:
+    image: "eclipse-mosquitto"
+    container_name: "mqtt"
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto:/etc/mosquitto
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+
+  mongodb:
+    image: "mongodb/mongodb-community-server"
+    container_name: "mongodb"
+    restart: unless-stopped
+    ports:
+      - 27017:27017
+    volumes:
+        - mongodb:/data/db
+    env_file: ".env"
+    networks:
+      - mongodb
+
+  fft:
+    build:
+      context: ./fft
+      dockerfile: Dockerfile
+    container_name: fft
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /data/ringbuffer:/data/ringbuffer
+
+
+volumes:
+    mongodb:
+
+networks:
+  mongodb:

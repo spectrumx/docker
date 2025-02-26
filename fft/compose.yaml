@@ -1,6 +1,8 @@
 services:
   fft:
-    image: fft
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: fft
     network_mode: host
     volumes:

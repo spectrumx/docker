@@ -31,6 +31,7 @@ announce_packet = {
   "title": "FFT generator",
   "description": "Generate fft from last 1024 samples in /data/ringbuffer",
   "author": "Randy Herban <rherban@nd.edu>",
+  "url": "https://hub.docker.com/u/randyherban/fft",
   "source": "https://github.com/spectrumx/docker/fft",
   "output":                               
     {

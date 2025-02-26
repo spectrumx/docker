@@ -13,4 +13,4 @@ FROM builder AS worker
 WORKDIR /app
 RUN pip install --no-cache-dir paho.mqtt digital_rf
 COPY . /app
-ENTRYPOINT ["python", "drf_read.py"]
+ENTRYPOINT ["python", "ringbuffer_to_fft.py"]
