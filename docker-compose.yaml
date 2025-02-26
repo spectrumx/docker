@@ -1,7 +1,7 @@
 version: '3'
 services:
   icarus:
-    build: /opt/radiohound/icarus
+    image: randyherban/icarus:latest
     network_mode: "host"
     container_name: "icarus"
     restart: unless-stopped
@@ -29,9 +29,7 @@ services:
       - mongodb
 
   fft:
-    build:
-      context: ./fft
-      dockerfile: Dockerfile
+    image: randyherban/fft:latest
     container_name: fft
     restart: unless-stopped
     network_mode: host
