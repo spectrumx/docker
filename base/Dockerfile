@@ -1,6 +1,6 @@
 FROM python:3.13-alpine AS builder
 WORKDIR /app
-RUN RUN apk update && apk add --no-cache \
+RUN apk update && apk add --no-cache \
     libhdf5-dev \
     libzmq3-dev \
     git \
