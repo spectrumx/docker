@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM randyherban/base-image
 WORKDIR /opt/radiohound/icarus
 COPY . .
 RUN apt-get update -y
