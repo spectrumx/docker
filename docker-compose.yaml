@@ -6,6 +6,18 @@ services:
     container_name: "icarus"
     restart: unless-stopped
 
+  radiohound_web:
+    image: randyherban/radiohound_web:latest
+    network_mode: "host"
+    container_name: "radiohound_web"
+    restart: unless-stopped
+
+  radiohound_app:
+    image: randyherban/radiohound_app:latest
+    network_mode: "host"
+    container_name: "radiohound_app"
+    restart: unless-stopped
+
   mqtt:
     image: "eclipse-mosquitto"
     container_name: "mqtt"
