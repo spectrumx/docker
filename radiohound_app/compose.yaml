@@ -1,5 +1,5 @@
 services:
-  icarus:
+  radiohound_app:
     build:
       context: /opt/radiohound/radiohound_app
       dockerfile: /opt/radiohound/docker/radiohound_app/Dockerfile
