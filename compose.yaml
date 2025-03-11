@@ -1,4 +1,4 @@
-version: '3.9'
+version: '3'
 services:
   icarus:
     image: randyherban/icarus:latest
@@ -66,6 +66,3 @@ volumes:
 
 networks:
   mongodb:
-
-profiles:
-  myprofile:
