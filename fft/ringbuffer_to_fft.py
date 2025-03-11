@@ -104,7 +104,7 @@ def process_file(data):
 		"batch": 0,
 		"sample_rate": 24000000,
 		"center_frequency": 2000000000,
-        "timestamp": datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f").replace(' ', 'T') + "+00:00",
+        "timestamp": datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f").replace(' ', 'T') + "+00:00",
 		"gain": 1,
 		"metadata": {
 			"data_type": "periodogram",
