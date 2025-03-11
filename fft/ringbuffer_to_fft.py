@@ -92,10 +92,11 @@ def process_file(data):
 	fft_result_b64 = base64.b64encode(np.abs(np.fft.fft(data)).astype(np.float32).tobytes()).decode('utf-8') # Encode to base64 string
 
 	print(f"{len(data)} samples read")
+  # Remove mac_address since we don't have full node population and it's breaking the website
+		#"mac_address": "f4e11ea46780",
 	payload = {
 			"data": fft_result_b64,
 			"type": "float32",
-		"mac_address": "f4e11ea46780",
 		"short_name": "WI-Lab V3.4-025 #6",
 		"software_version": "v0.10b30",
 		"latitude": 41.699584,
