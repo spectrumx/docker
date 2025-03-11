@@ -1,19 +1,38 @@
-version: '3'
+version: '3.9'
 services:
+  base:     # This is the base image used to build subsequent containers.  Doesn't actually run
+    image: randyherban/base-image:latest
+  build:
+    context: /opt/radiohound/base
+    dockerfile: /opt/radiohound/base/Dockerfile
+  profiles:
+    - base_image_only
+
+
+
   icarus:
     image: randyherban/icarus:latest
+    build:
+      context: /opt/radiohound/icarus
+      dockerfile: /opt/radiohound/docker/icarus-Dockerfile
     network_mode: "host"
     container_name: "icarus"
     restart: unless-stopped
 
   radiohound_web:
     image: randyherban/radiohound_web:latest
+    build:
+      context: /opt/radiohound/radiohound_web
+      dockerfile: /opt/radiohound/docker/radiohound_web-Dockerfile
     network_mode: "host"
     container_name: "radiohound_web"
     restart: unless-stopped
 
   radiohound_app:
     image: randyherban/radiohound_app:latest
+    build:
+      context: /opt/radiohound/radiohound_app
+      dockerfile: /opt/radiohound/docker/radiohound_app-Dockerfile
     network_mode: "host"
     container_name: "radiohound_app"
     restart: unless-stopped
@@ -42,6 +61,9 @@ services:
 
   fft:
     image: randyherban/fft:latest
+    build:
+      context: /opt/radiohound/docker/fft
+      dockerfile: /opt/radiohound/docker/fft/Dockerfile
     container_name: fft
     restart: unless-stopped
     network_mode: host

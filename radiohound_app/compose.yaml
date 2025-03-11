@@ -1,7 +1,0 @@
-services:
-  radiohound_app:
-    build:
-      context: /opt/radiohound/radiohound_app
-      dockerfile: /opt/radiohound/docker/radiohound_app/Dockerfile
-    container_name: radiohound_app
-    network_mode: host
