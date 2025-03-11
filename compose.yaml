@@ -1,15 +1,5 @@
 version: '3.9'
 services:
-  base:     # This is the base image used to build subsequent containers.  Doesn't actually run
-    image: randyherban/base-image:latest
-  build:
-    context: /opt/radiohound/base
-    dockerfile: /opt/radiohound/base/Dockerfile
-  profiles:
-    - base_image_only
-
-
-
   icarus:
     image: randyherban/icarus:latest
     build:
@@ -76,3 +66,6 @@ volumes:
 
 networks:
   mongodb:
+
+profiles:
+  myprofile:
