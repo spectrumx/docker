@@ -48,7 +48,7 @@ def send_status(client):
   payload = {"state": "online", "timestamp": time.time()}
   # Get Docker container status
   containers_info = []
-  for container in client.containers.list():
+  for container in docker.containers.list():
     container_info = {
         'id': container.id,
         'name': container.name,
