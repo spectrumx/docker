@@ -57,7 +57,7 @@ def send_status(client):
     }
     containers_info.append(container_info)
   payload["docker"] = containers_info
-  client.publish(service_name + "/status", json.dumps(payload))
+  client.publish(service_name + "/status", json.dumps(payload), retain=True)
 
 def start_container(container_name):
     try:
