@@ -5,7 +5,7 @@ import json
 
 docker = docker.from_env()
 
-service_name = "docker-control"
+service_name = "docker"
 announce_packet = {
   "title": "Docker Control Script",
   "description": "Manages Docker containers",
@@ -20,25 +20,32 @@ announce_packet = {
 
 # Define MQTT callbacks
 def on_connect(client, userdata, flags, rc):
-    print(f"Connected with result code {rc}")
+    global service_name
+    print(f"{service_name} connected to mqtt: {rc}")
+    send_status(client)
 
 def on_message(client, userdata, msg):
     payload = msg.payload.decode()
     print(f"Received message: {payload}")
-    command, container_name = payload.split()
+    parts = payload.split()
 
-    if command == "start":
-        start_container(container_name)
-    elif command == "stop":
-        stop_container(container_name)
-    elif command == "pull":
-        pull_container(container_name)
+    if parts[0] == "start":
+        start_container(parts[1])
+    elif parts[0] == "stop":
+        stop_container(parts[1])
+    elif parts[0] == "pull":
+        pull_container(parts[1])
+    elif parts[0] == "status":
+        # List this as a valid command, but we send status with every command
+        pass  
     else:
-        print(f"Unknown command: {command}")
+        print(f"Unknown command: {parts[0]}")
+    
+    send_status(client)
 
 def send_status(client):
   global service_name
-  payload = {"state": "oneline", "timestamp": time.time()}
+  payload = {"state": "online", "timestamp": time.time()}
   # Get Docker container status
   containers_info = []
   for container in client.containers.list():
