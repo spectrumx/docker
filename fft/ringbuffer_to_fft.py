@@ -66,7 +66,7 @@ def on_message(client, userdata, msg):
 def send_status(client):
   global service_name
   payload = {"state": "disabled" if disabled else "online", "timestamp": time.time()}
-  client.publish(service_name + "/status", json.dumps(payload))
+  client.publish(service_name + "/status", json.dumps(payload), retain=True)
 
 
 
