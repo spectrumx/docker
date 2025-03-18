@@ -25,23 +25,30 @@ def on_connect(client, userdata, flags, rc):
     send_status(client)
 
 def on_message(client, userdata, msg):
-    payload = msg.payload.decode()
-    print(f"Received message: {payload}")
-    parts = payload.split()
+    try:
+        payload = msg.payload.decode()
+        print(f"Received message: {payload}")
+        parts = payload.split()
 
-    if parts[0] == "start":
-        start_container(parts[1])
-    elif parts[0] == "stop":
-        stop_container(parts[1])
-    elif parts[0] == "pull":
-        pull_container(parts[1])
-    elif parts[0] == "status":
-        # List this as a valid command, but we send status with every command
-        pass  
-    else:
-        print(f"Unknown command: {parts[0]}")
-    
-    send_status(client)
+        if parts[0] == "start":
+            start_container(parts[1:])
+        elif parts[0] == "stop":
+            stop_container(parts[1:])
+        elif parts[0] == "pull":
+            pull_container(parts[1:])
+        elif parts[0] == "run":
+            # Assume rest of input is a dictionary which will get passed directly to containers.run()
+            json_string = ' '.join(parts[2:]).replace("'", '"')
+            run_container(parts[1], json.loads(json_string))
+        elif parts[0] == "status":
+            # List this as a valid command, but we send status with every command
+            pass  
+        else:
+            print(f"Unknown command: {parts[0]}")
+        
+        send_status(client)
+    except Exception as err:
+        print(f"Failed to parse incoming message: {msg.payload.decode()}\n{err}")
 
 def send_status(client):
   global service_name
@@ -64,6 +71,15 @@ def send_status(client):
       }
   client.publish(service_name + "/status", json.dumps(payload), retain=True)
 
+def run_container(name, args):
+    try:
+        container = docker_client.containers.run(name, **args, detach=True)
+        print(f"Running container: {container.name} with {args}")
+    except docker.errors.NotFound:
+        print(f"Container not found: {args}")
+    except docker.errors.APIError as e:
+        print(f"API error: {e}")
+
 def start_container(container_name):
     try:
         container = docker_client.containers.get(container_name)
@@ -71,7 +87,7 @@ def start_container(container_name):
         print(f"Started container: {container_name}")
     except docker.errors.NotFound:
         print(f"Container not found: {container_name}")
-    except docker.APIError as e:
+    except docker.errors.APIError as e:
         print(f"API error: {e}")
 
 def stop_container(container_name):
