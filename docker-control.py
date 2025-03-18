@@ -60,7 +60,7 @@ def send_status(client):
       "state": "online", 
       "timestamp": time.time(),
       "task_name": "tasks.admin.save_docker",
-      "arguments": containers_info,
+      "arguments": {"containers": containers_info},
       }
   client.publish(service_name + "/status", json.dumps(payload), retain=True)
 
