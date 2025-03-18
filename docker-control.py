@@ -3,7 +3,7 @@ import docker
 import time
 import json
 
-docker_client = docker_client.from_env()
+docker_client = docker.from_env()
 
 service_name = "docker"
 announce_packet = {
