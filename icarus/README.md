@@ -1,0 +1,1 @@
+This directory exists to hold the system.json config since it downloads a cached copy to the local disk.  Leaving it here in case we want to make edits and test.
