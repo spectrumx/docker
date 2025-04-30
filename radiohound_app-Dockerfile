@@ -1,6 +1,7 @@
 FROM randyherban/base-image
 WORKDIR /app
-COPY . .
+COPY flask .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 EXPOSE 5001
 CMD ["python", "-u", "flask/app.py"]
