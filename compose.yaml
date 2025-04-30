@@ -5,8 +5,8 @@ services:
     build:
       context: /opt/radiohound/icarus
       dockerfile: /opt/radiohound/docker/icarus-Dockerfile
-    volumes:
-      - ./icarus/system.json:/opt/radiohound/icarus/system.json
+    #volumes:
+      #- ./icarus/system.json:/opt/radiohound/icarus/system.json
     network_mode: "host"
     container_name: "icarus"
     restart: unless-stopped
