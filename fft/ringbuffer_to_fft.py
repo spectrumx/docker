@@ -137,7 +137,13 @@ client.publish('announce/' + service_name, json.dumps(announce_packet), retain=T
 
 data_dir = '/data/ringbuffer'
 channel = "ch0"
-reader = digital_rf.DigitalRFReader(data_dir)
+opened_flag = False
+while not opened_flag:
+  try:
+    reader = digital_rf.DigitalRFReader(data_dir)
+    opened_flag = True
+  except:
+    time.sleep(60)
 
 prev_end_sample = 0
 while True:
