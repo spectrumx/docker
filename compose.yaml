@@ -70,6 +70,7 @@ services:
       - HOLOSCAN_EXECUTOR_LOG_LEVEL=WARN
       - HOLOSCAN_LOG_LEVEL=INFO
       - HOLOSCAN_LOG_FORMAT=DEFAULT
+      - PYTHONUNBUFFERED=1
     networks:
       - default
       - rfsoc_10GbE
