@@ -64,9 +64,7 @@ async def run_drf_mirror(service):
         ".",
         "/data/ringbuffer/in",
     ]
-    async with await anyio.open_process(command) as process:
-        async for text in anyio.streams.text.TextReceiveStream(process.stdout):
-            print(text)
+    await anyio.run_process(command, stdout=None, stderr=None, check=False)
 
 
 async def run_recorder(service):
@@ -80,9 +78,7 @@ async def run_recorder(service):
     with anyio.CancelScope() as scope:
         service.recording_scope = scope
         try:
-            async with await anyio.open_process(command) as process:
-                async for text in anyio.streams.text.TextReceiveStream(process.stdout):
-                    print(text)
+            await anyio.run_process(command, stdout=None, stderr=None, check=False)
         except anyio.get_cancelled_exc_class():
             channel_dir = pathlib.Path(config["drf_sink"]["channel_dir"])
             shutil.rmtree(channel_dir, ignore_errors=True)
