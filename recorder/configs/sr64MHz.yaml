@@ -52,7 +52,11 @@ basic_network:
   ip_addr: 0.0.0.0 # Destination IP address
 
 drf_sink:
-  chunk_size: *rx_chunk_size
-  num_subchannels: *num_subchannels
   channel_dir: sr64MHz
-  uuid: mep_pipeline_sr64MHz
+
+metadata:
+  receiver:
+    description: "MEP recorder"
+  processing:
+    decimation: 1
+    interpolation: 1

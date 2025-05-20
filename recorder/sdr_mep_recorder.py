@@ -26,9 +26,8 @@ import typing
 
 import holoscan
 import jsonargparse
-from jsonargparse.typing import NonNegativeInt, PositiveInt
-
 from holohub import basic_network, rf_array
+from holohub.rf_array.digital_metadata import DigitalMetadataSink
 from holohub.rf_array.params import (
     DigitalRFSinkParams,
     NetConnectorBasicParams,
@@ -37,6 +36,7 @@ from holohub.rf_array.params import (
     SubchannelSelectParams,
     add_chunk_kwargs,
 )
+from jsonargparse.typing import NonNegativeInt, PositiveInt
 
 logger = logging.getLogger("sdr_mep_recorder.py")
 
@@ -108,7 +108,9 @@ def build_config_parser():
     parser.add_argument("--basic_network", type=BasicNetworkOperatorParams)
     parser.add_argument("--advanced_network", type=AdvancedNetworkOperatorParams)
     parser.add_argument(
-        "--packet", type=NetConnectorBasicParams, default=NetConnectorBasicParams(spoof_header=True)
+        "--packet",
+        type=NetConnectorBasicParams,
+        default=NetConnectorBasicParams(spoof_header=True),
     )
     parser.add_argument("--selector", type=SubchannelSelectParams)
     parser.add_argument("--rotator", type=RotatorScheduledParams)
@@ -148,6 +150,9 @@ def build_config_parser():
         ),
     )
     parser.add_argument("--drf_sink", type=DigitalRFSinkParams)
+    parser.add_argument(
+        "--metadata", type=typing.Optional[dict[str, typing.Any]], default=None
+    )
 
     return parser
 
@@ -170,7 +175,9 @@ class App(holoscan.core.Application):
         last_op = net_connector_rx
 
         if self.kwargs("pipeline")["selector"]:
-            selector = rf_array.SubchannelSelect_sc16(self, name="selector", **self.kwargs("selector"))
+            selector = rf_array.SubchannelSelect_sc16(
+                self, name="selector", **self.kwargs("selector")
+            )
             self.add_flow(last_op, selector)
             last_op = selector
             last_chunk_shape = (
@@ -187,37 +194,57 @@ class App(holoscan.core.Application):
             last_op = converter
 
             if self.kwargs("pipeline")["rotator"]:
-                rotator = rf_array.RotatorScheduled(self, name="rotator", **self.kwargs("rotator"))
+                rotator = rf_array.RotatorScheduled(
+                    self, name="rotator", **self.kwargs("rotator")
+                )
                 self.add_flow(last_op, rotator)
                 last_op = rotator
 
             if self.kwargs("pipeline")["resampler0"]:
-                resample_kwargs = add_chunk_kwargs(last_chunk_shape, **self.kwargs("resampler0"))
-                resampler0 = rf_array.ResamplePoly(self, name="resampler0", **resample_kwargs)
+                resample_kwargs = add_chunk_kwargs(
+                    last_chunk_shape, **self.kwargs("resampler0")
+                )
+                resampler0 = rf_array.ResamplePoly(
+                    self, name="resampler0", **resample_kwargs
+                )
                 self.add_flow(last_op, resampler0)
                 last_op = resampler0
                 last_chunk_shape = (
-                    last_chunk_shape[0] * resample_kwargs["up"] // resample_kwargs["down"],
+                    last_chunk_shape[0]
+                    * resample_kwargs["up"]
+                    // resample_kwargs["down"],
                     last_chunk_shape[1],
                 )
 
             if self.kwargs("pipeline")["resampler1"]:
-                resample_kwargs = add_chunk_kwargs(last_chunk_shape, **self.kwargs("resampler1"))
-                resampler1 = rf_array.ResamplePoly(self, name="resampler1", **resample_kwargs)
+                resample_kwargs = add_chunk_kwargs(
+                    last_chunk_shape, **self.kwargs("resampler1")
+                )
+                resampler1 = rf_array.ResamplePoly(
+                    self, name="resampler1", **resample_kwargs
+                )
                 self.add_flow(last_op, resampler1)
                 last_op = resampler1
                 last_chunk_shape = (
-                    last_chunk_shape[0] * resample_kwargs["up"] // resample_kwargs["down"],
+                    last_chunk_shape[0]
+                    * resample_kwargs["up"]
+                    // resample_kwargs["down"],
                     last_chunk_shape[1],
                 )
 
             if self.kwargs("pipeline")["resampler2"]:
-                resample_kwargs = add_chunk_kwargs(last_chunk_shape, **self.kwargs("resampler2"))
-                resampler2 = rf_array.ResamplePoly(self, name="resampler2", **resample_kwargs)
+                resample_kwargs = add_chunk_kwargs(
+                    last_chunk_shape, **self.kwargs("resampler2")
+                )
+                resampler2 = rf_array.ResamplePoly(
+                    self, name="resampler2", **resample_kwargs
+                )
                 self.add_flow(last_op, resampler2)
                 last_op = resampler2
                 last_chunk_shape = (
-                    last_chunk_shape[0] * resample_kwargs["up"] // resample_kwargs["down"],
+                    last_chunk_shape[0]
+                    * resample_kwargs["up"]
+                    // resample_kwargs["down"],
                     last_chunk_shape[1],
                 )
 
@@ -236,16 +263,35 @@ class App(holoscan.core.Application):
             )
             self.add_flow(last_op, drf_sink)
 
+        dmd_sink = DigitalMetadataSink(
+            self,
+            name="dmd_sink",
+            metadata_dir=f"{self.kwargs('drf_sink')['channel_dir']}/metadata",
+            subdir_cadence_secs=self.kwargs("drf_sink")["subdir_cadence_secs"],
+            file_cadence_secs=self.kwargs("drf_sink")["file_cadence_millisecs"] // 1000,
+            uuid=self.kwargs("drf_sink")["uuid"],
+            filename_prefix="metadata",
+            metadata=self.kwargs("metadata"),
+        )
+        self.add_flow(last_op, dmd_sink)
+
 
 def main():
     parser = build_config_parser()
     cfg = parser.parse_args()
 
     env_log_level = os.environ.get("HOLOSCAN_LOG_LEVEL", "WARN").upper()
-    if env_log_level == "TRACE":
-        # TRACE exists for holoscan, but not in Python, so substitute with DEBUG
-        env_log_level = "DEBUG"
-    logging.basicConfig(level=env_log_level)
+    log_level_map = {
+        "OFF": "NOTSET",
+        "CRITICAL": "CRITICAL",
+        "ERROR": "ERROR",
+        "WARN": "WARNING",
+        "INFO": "INFO",
+        "DEBUG": "DEBUG",
+        "TRACE": "DEBUG",
+    }
+    log_level = log_level_map[env_log_level]
+    logging.basicConfig(level=log_level, force=True)
 
     # We have a parsed configuration (using jsonargparse), but the holoscan app wants
     # to read all of its configuration parameters from a YAML file, so we write out

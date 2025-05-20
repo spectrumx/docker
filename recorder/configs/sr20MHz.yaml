@@ -70,4 +70,10 @@ resampler2:
 
 drf_sink:
   channel_dir: sr20MHz
-  uuid: mep_pipeline_sr20MHz
+
+metadata:
+  receiver:
+    description: "MEP recorder"
+  processing:
+    decimation: 16
+    interpolation: 5

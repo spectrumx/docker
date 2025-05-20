@@ -70,4 +70,10 @@ resampler2:
 
 drf_sink:
   channel_dir: sr16MHz
-  uuid: mep_pipeline_sr16MHz
+
+metadata:
+  receiver:
+    description: "MEP recorder"
+  processing:
+    decimation: 4
+    interpolation: 1
