@@ -58,9 +58,35 @@ services:
     volumes:
       - /data/ringbuffer:/data/ringbuffer
 
+  recorder:
+    image: ghcr.io/ryanvolz/mep-recorder:latest
+    build: ./recorder
+    container_name: recorder
+    environment:
+      - HOLOSCAN_EXECUTOR_LOG_LEVEL=WARN
+      - HOLOSCAN_LOG_LEVEL=INFO
+      - HOLOSCAN_LOG_FORMAT=DEFAULT
+      - PYTHONUNBUFFERED=1
+    networks:
+      - default
+      - rfsoc_10GbE
+    ports:
+      - 60133:60133/udp
+    restart: unless-stopped
+    runtime: nvidia
+    tmpfs:
+      - /ramdisk:mode=777,uid=${UID},gid=${GID},nodev,nosuid,noexec,size=1G
+    user: ${UID}:${GID}
+    volumes:
+      - /data/ringbuffer:/data/ringbuffer
 
 volumes:
     mongodb:
 
 networks:
   mongodb:
+  rfsoc_10GbE:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.host_binding_ipv4: "192.168.4.1"
+      com.docker.network.driver.mtu: 9000
