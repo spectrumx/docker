@@ -121,7 +121,7 @@ async def main():
         retain=True,
     )
     client = aiomqtt.Client(
-        "mqtt",
+        "localhost",
         1883,
         keepalive=60,
         will=will,

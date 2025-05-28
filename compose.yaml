@@ -67,11 +67,7 @@ services:
       - HOLOSCAN_LOG_LEVEL=INFO
       - HOLOSCAN_LOG_FORMAT=DEFAULT
       - PYTHONUNBUFFERED=1
-    networks:
-      - default
-      - rfsoc_10GbE
-    ports:
-      - 60133:60133/udp
+    network_mode: host
     restart: unless-stopped
     runtime: nvidia
     tmpfs:
@@ -85,8 +81,3 @@ volumes:
 
 networks:
   mongodb:
-  rfsoc_10GbE:
-    driver: bridge
-    driver_opts:
-      com.docker.network.bridge.host_binding_ipv4: "192.168.4.1"
-      com.docker.network.driver.mtu: 9000
