@@ -52,6 +52,9 @@ services:
     image: randyherban/fft:latest
     platform: linux/arm64/v8
     env_file: ".env"
+    environment:
+      - DRF_RECORDING_DIR=/data/ringbuffer
+      - DRF_FFT_CHANNEL=ch0
     container_name: fft
     restart: unless-stopped
     network_mode: host
@@ -63,10 +66,12 @@ services:
     build: ./recorder
     container_name: recorder
     environment:
+      - DRF_RECORDING_DIR=/data/ringbuffer
       - HOLOSCAN_EXECUTOR_LOG_LEVEL=WARN
       - HOLOSCAN_LOG_LEVEL=INFO
       - HOLOSCAN_LOG_FORMAT=DEFAULT
       - PYTHONUNBUFFERED=1
+      - RECORDER_DEFAULT_CONFIG=sr1MHz
     network_mode: host
     restart: unless-stopped
     runtime: nvidia

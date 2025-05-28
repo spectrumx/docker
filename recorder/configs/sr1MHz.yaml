@@ -78,7 +78,7 @@ resampler2:
   attenuation_db: 99.25
 
 drf_sink:
-  channel_dir: sr1MHz
+  channel_dir: ch0
 
 metadata:
   receiver:

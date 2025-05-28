@@ -1,5 +1,6 @@
 import dataclasses
 import json
+import os
 import pathlib
 import shutil
 import time
@@ -9,6 +10,9 @@ import aiomqtt
 import anyio
 import anyio.streams
 from ruyaml import YAML
+
+DRF_RECORDING_DIR = os.getenv("DRF_RECORDING_DIR", "/data/ringbuffer")
+RECORDER_DEFAULT_CONFIG = os.getenv("RECORDER_DEFAULT_CONFIG", "sr1MHz")
 
 
 @dataclasses.dataclass
@@ -25,8 +29,8 @@ def load_configs(service, config_path=pathlib.Path("/app/configs")):
     yaml = YAML(typ="safe")
     for p in config_paths:
         service.configs[p.stem] = yaml.load(p)
-    if "sr1MHz" in service.configs:
-        service.active_config = "sr1MHz"
+    if RECORDER_DEFAULT_CONFIG in service.configs:
+        service.active_config = RECORDER_DEFAULT_CONFIG
     else:
         service.active_config = list(service.configs.keys())[0]
 
@@ -34,12 +38,12 @@ def load_configs(service, config_path=pathlib.Path("/app/configs")):
 async def send_announce(client, service):
     payload = {
         "title": "Recorder",
-        "description": "Record data to /data/ringbuffer/in",
+        "description": f"Record data to {DRF_RECORDING_DIR}",
         "author": "Ryan Volz <rvolz@mit.edu>",
         "url": "ghcr.io/ryanvolz/mep-recorder:latest",
         "source": "https://github.com/spectrumx/docker/recorder",
         "output": {
-            "output_name": {"type": "disk", "value": "/data/ringbuffer/in"},
+            "output_name": {"type": "disk", "value": f"{DRF_RECORDING_DIR}"},
         },
         "version": "0.1",
         "type": "service",
@@ -63,7 +67,7 @@ async def run_drf_mirror(service):
         "mv",
         "--verbose",
         ".",
-        "/data/ringbuffer/in",
+        f"{DRF_RECORDING_DIR}",
     ]
     await anyio.run_process(command, stdout=None, stderr=None, check=False)
 
