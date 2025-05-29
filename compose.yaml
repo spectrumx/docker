@@ -36,6 +36,22 @@ services:
       - ./mosquitto:/etc/mosquitto
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
 
+  mqtt-ssh-tunnel:
+    image: randyherban/base-image:latest
+    container_name: mqtt_ssh_tunnel
+    ports:
+      - "8083:8083"
+    restart: unless-stopped
+    volumes:
+      - /opt/radiohound/.ssh/id_rsa:/root/.ssh/id_rsa:ro
+    entrypoint: >
+      sh -c "apt apt-get install -y openssh && 
+             while true; do
+               nc -zvw3 radiohound.ee.nd.edu 1883 || 
+               ssh -i /root/.ssh/id_rsa -o GlobalKnownHostsFile=/dev/null -o StrictHostKeyChecking=no  -N -L 8083:radiohound.ee.nd.edu:1883 git@radiohound.ee.nd.edu;
+               sleep 10;
+             done"
+
   mongodb:
     image: "mongodb/mongodb-community-server"
     container_name: "mongodb"
