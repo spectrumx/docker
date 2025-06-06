@@ -45,9 +45,9 @@ services:
     volumes:
       - /opt/radiohound/.ssh/id_rsa:/root/.ssh/id_rsa:ro
     entrypoint: >
-      sh -c "apk add --no-cache openssh && 
+      sh -c "apk add --no-cache openssh &&
              while true; do
-               nc -zvw3 radiohound.ee.nd.edu 1883 || 
+               nc -zvw3 radiohound.ee.nd.edu 1883 ||
                ssh -i /root/.ssh/id_rsa -o GlobalKnownHostsFile=/dev/null -o StrictHostKeyChecking=no  -N -L 8083:radiohound.ee.nd.edu:1883 git@radiohound.ee.nd.edu;
                sleep 10;
              done"
@@ -83,6 +83,7 @@ services:
     container_name: recorder
     environment:
       - DRF_RECORDING_DIR=/data/ringbuffer
+      - DRF_TMP_RINGBUFFER_DIR=/data/tmp-ringbuffer
       - HOLOSCAN_EXECUTOR_LOG_LEVEL=WARN
       - HOLOSCAN_LOG_LEVEL=INFO
       - HOLOSCAN_LOG_FORMAT=DEFAULT
@@ -95,7 +96,7 @@ services:
       - /ramdisk:mode=777,uid=${UID},gid=${GID},nodev,nosuid,noexec,size=1G
     user: ${UID}:${GID}
     volumes:
-      - /data/ringbuffer:/data/ringbuffer
+      - /data:/data
 
 volumes:
     mongodb:

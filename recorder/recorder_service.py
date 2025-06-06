@@ -12,6 +12,7 @@ import anyio.streams
 from ruyaml import YAML
 
 DRF_RECORDING_DIR = os.getenv("DRF_RECORDING_DIR", "/data/ringbuffer")
+DRF_TMP_RINGBUFFER_DIR = os.getenv("DRF_TMP_RINGBUFFER_DIR", "/data/tmp-ringbuffer")
 RECORDER_DEFAULT_CONFIG = os.getenv("RECORDER_DEFAULT_CONFIG", "sr1MHz")
 
 
@@ -67,9 +68,36 @@ async def run_drf_mirror(service):
         "mv",
         "--verbose",
         ".",
-        f"{DRF_RECORDING_DIR}",
+        DRF_RECORDING_DIR,
     ]
     await anyio.run_process(command, stdout=None, stderr=None, check=False)
+
+
+async def run_drf_mirror_tmp(service):
+    command = [
+        "drf",
+        "mirror",
+        "cp",
+        "--link",
+        DRF_RECORDING_DIR,
+        DRF_TMP_RINGBUFFER_DIR,
+    ]
+    await anyio.run_process(command, stdout=None, stderr=None, check=False)
+
+
+async def run_drf_ringbuffer_tmp(service):
+    command = [
+        "drf",
+        "ringbuffer",
+        "-l",
+        "2",
+        DRF_TMP_RINGBUFFER_DIR,
+    ]
+    with anyio.CancelScope() as scope:
+        try:
+            await anyio.run_process(command, stdout=None, stderr=None, check=False)
+        finally:
+            shutil.rmtree(DRF_TMP_RINGBUFFER_DIR, ignore_errors=True)
 
 
 async def run_recorder(service):
@@ -139,6 +167,8 @@ async def main():
                 await send_status(client, service)
                 async with anyio.create_task_group() as tg:
                     tg.start_soon(run_drf_mirror, service)
+                    tg.start_soon(run_drf_mirror_tmp, service)
+                    tg.start_soon(run_drf_ringbuffer_tmp, service)
                     enable_recording(service, tg)
                     tg.start_soon(process_commands, client, service, tg)
         except aiomqtt.MqttError:
