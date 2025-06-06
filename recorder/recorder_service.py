@@ -74,6 +74,7 @@ async def run_drf_mirror(service):
 
 
 async def run_drf_mirror_tmp(service):
+    shutil.rmtree(DRF_TMP_RINGBUFFER_DIR, ignore_errors=True)
     command = [
         "drf",
         "mirror",
@@ -93,11 +94,10 @@ async def run_drf_ringbuffer_tmp(service):
         "2",
         DRF_TMP_RINGBUFFER_DIR,
     ]
-    with anyio.CancelScope() as scope:
-        try:
-            await anyio.run_process(command, stdout=None, stderr=None, check=False)
-        finally:
-            shutil.rmtree(DRF_TMP_RINGBUFFER_DIR, ignore_errors=True)
+    try:
+        await anyio.run_process(command, stdout=None, stderr=None, check=False)
+    finally:
+        shutil.rmtree(DRF_TMP_RINGBUFFER_DIR, ignore_errors=True)
 
 
 async def run_recorder(service):
@@ -170,9 +170,15 @@ async def main():
                     tg.start_soon(run_drf_mirror_tmp, service)
                     tg.start_soon(run_drf_ringbuffer_tmp, service)
                     enable_recording(service, tg)
+                    # update status after enabling recording
+                    tg.start_soon(send_status, client, service)
                     tg.start_soon(process_commands, client, service, tg)
         except aiomqtt.MqttError:
-            print(f"Connection lost; Reconnecting in {interval} seconds ...")
+            msg = (
+                "Connection to MQTT server lost;"
+                f" Reconnecting in {interval} seconds ..."
+            )
+            print(msg)
             await anyio.sleep(interval)
 
 
