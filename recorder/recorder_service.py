@@ -185,7 +185,7 @@ async def process_config_command(client, service, payload):
             service.config.update(val, key)
             await send_config(client, service, service.config.as_dict(), response_topic)
         if cmd == "list":
-            available_config_names = list(service.loadable_configs.keys())
+            available_config_names = sorted(list(service.loadable_configs.keys()))
             if response_topic is None:
                 response_topic = f"{service.name}/config/response"
             payload = {
