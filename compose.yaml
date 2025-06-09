@@ -70,7 +70,7 @@ services:
     env_file: ".env"
     environment:
       - DRF_RECORDING_DIR=/data/ringbuffer
-      - DRF_FFT_CHANNEL=ch0
+      - DRF_FFT_CHANNEL=sr1MHz
     container_name: fft
     restart: unless-stopped
     network_mode: host

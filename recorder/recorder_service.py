@@ -248,7 +248,6 @@ async def main():
                     tg.start_soon(run_drf_mirror, service)
                     tg.start_soon(run_drf_mirror_tmp, service)
                     tg.start_soon(run_drf_ringbuffer_tmp, service)
-                    enable_recording(client, service, tg)
                     tg.start_soon(process_commands, client, service, tg)
         except aiomqtt.MqttError:
             msg = (

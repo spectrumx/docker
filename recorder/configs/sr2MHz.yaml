@@ -63,12 +63,12 @@ rotator:
 
 resampler0:
   up: 1
-  down: 8
+  down: 4
   outrate_cutoff: 1.0
   # transition_width: 2 * (cutoff - 1 / remaining_dec)
   #                   2 * (1.0 - 1 / 8) = 1.75
   outrate_transition_width: 1.75
-  attenuation_db: 105
+  attenuation_db: 102
 
 resampler2:
   up: 1
@@ -78,11 +78,11 @@ resampler2:
   attenuation_db: 99.25
 
 drf_sink:
-  channel_dir: sr1MHz
+  channel_dir: sr2MHz
 
 metadata:
   receiver:
     description: "MEP recorder"
   processing:
-    decimation: 64
+    decimation: 32
     interpolation: 1
