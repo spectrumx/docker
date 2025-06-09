@@ -215,7 +215,7 @@ async def process_commands(client, service, task_group):
         if payload["task_name"] == "disable":
             disable_recording(service)
         if payload["task_name"] == "enable":
-            enable_recording(service, task_group)
+            enable_recording(client, service, task_group)
         if payload["task_name"] == "status":
             await send_status(client, service)
         if payload["task_name"].startswith("config."):
