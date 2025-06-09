@@ -74,11 +74,12 @@ async def send_error(client, service, message, response_topic=None):
     await client.publish(response_topic, json.dumps(payload))
 
 
-async def send_config(client, service, config, response_topic=None):
+async def send_config(client, service, value, response_topic=None):
     if response_topic is None:
         response_topic = f"{service.name}/config/response"
+
     payload = {
-        "value": config.as_dict(),
+        "value": value,
         "timestamp": time.time(),
     }
     await client.publish(response_topic, json.dumps(payload))
@@ -166,21 +167,23 @@ async def process_config_command(client, service, payload):
             key = args.get("key", "")
             try:
                 if not key:
-                    config = service.config
+                    value = service.config
                 else:
-                    config = service.config[key]
+                    value = service.config[key]
+                if isinstance(value, jsonargparse.Namespace):
+                    value = value.as_dict()
             except KeyError:
                 msg = f"ERROR config.get: key '{key}' not found."
                 await send_error(client, service, msg, response_topic)
             else:
-                await send_config(client, service, config, response_topic)
+                await send_config(client, service, value, response_topic)
         if cmd == "set":
             key = args.get("key", "")
             val = args["value"]
             if isinstance(val, dict):
                 val = jsonargparse.dict_to_namespace(val)
             service.config.update(val, key)
-            await send_config(client, service, service.config, response_topic)
+            await send_config(client, service, service.config.as_dict(), response_topic)
         if cmd == "list":
             available_config_names = list(service.loadable_configs.keys())
             if response_topic is None:
@@ -198,7 +201,9 @@ async def process_config_command(client, service, payload):
                 msg = f"ERROR config.load: configuration '{config_name}' not found."
                 await send_error(client, service, msg, response_topic)
             else:
-                await send_config(client, service, service.config, response_topic)
+                await send_config(
+                    client, service, service.config.as_dict(), response_topic
+                )
     except Exception:
         msg = f"ERROR config:\n{traceback.format_exc()}"
         await send_error(client, service, msg, response_topic)
@@ -209,10 +214,8 @@ async def process_commands(client, service, task_group):
         payload = json.loads(message.payload.decode())
         if payload["task_name"] == "disable":
             disable_recording(service)
-            await send_status(client, service)
         if payload["task_name"] == "enable":
             enable_recording(service, task_group)
-            await send_status(client, service)
         if payload["task_name"] == "status":
             await send_status(client, service)
         if payload["task_name"].startswith("config."):
