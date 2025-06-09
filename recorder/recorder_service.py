@@ -4,6 +4,7 @@ import os
 import pathlib
 import shutil
 import time
+import traceback
 from typing import Any, Optional
 
 import aiomqtt
@@ -31,7 +32,7 @@ def load_configs(service, config_path=pathlib.Path("/app/configs")):
     config_paths = sorted(pathlib.Path(config_path).glob("*.yaml"))
     yaml = YAML(typ="safe")
     for p in config_paths:
-        service.loadable_configs[p.stem] = jsonargparse.Namespace(yaml.load(p))
+        service.loadable_configs[p.stem] = jsonargparse.dict_to_namespace(yaml.load(p))
     if RECORDER_DEFAULT_CONFIG in service.loadable_configs:
         service.config = service.loadable_configs[RECORDER_DEFAULT_CONFIG]
     else:
@@ -70,7 +71,7 @@ async def send_error(client, service, message, response_topic=None):
         "message": message,
         "timestamp": time.time(),
     }
-    await client.publish(response_topic, json.dumps(payload), retain=True)
+    await client.publish(response_topic, json.dumps(payload))
 
 
 async def send_config(client, service, config, response_topic=None):
@@ -80,7 +81,7 @@ async def send_config(client, service, config, response_topic=None):
         "value": config.as_dict(),
         "timestamp": time.time(),
     }
-    await client.publish(response_topic, json.dumps(payload), retain=True)
+    await client.publish(response_topic, json.dumps(payload))
 
 
 async def run_drf_mirror(service):
@@ -161,33 +162,45 @@ async def process_config_command(client, service, payload):
     args = payload.get("arguments", None)
     response_topic = payload.get("response_topic", None)
     try:
+        if cmd == "get":
+            key = args.get("key", "")
+            try:
+                if not key:
+                    config = service.config
+                else:
+                    config = service.config[key]
+            except KeyError:
+                msg = f"ERROR config.get: key '{key}' not found."
+                await send_error(client, service, msg, response_topic)
+            else:
+                await send_config(client, service, config, response_topic)
+        if cmd == "set":
+            key = args.get("key", "")
+            val = args["value"]
+            if isinstance(val, dict):
+                val = jsonargparse.dict_to_namespace(val)
+            service.config.update(val, key)
+            await send_config(client, service, service.config, response_topic)
+        if cmd == "list":
+            available_config_names = list(service.loadable_configs.keys())
+            if response_topic is None:
+                response_topic = f"{service.name}/config/response"
+            payload = {
+                "available_configs": available_config_names,
+                "timestamp": time.time(),
+            }
+            await client.publish(response_topic, json.dumps(payload))
         if cmd == "load":
             config_name = args["name"]
             try:
                 service.config = service.loadable_configs[config_name]
             except KeyError:
-                msg = f"config.load error: configuration {config_name} not found."
+                msg = f"ERROR config.load: configuration '{config_name}' not found."
                 await send_error(client, service, msg, response_topic)
             else:
                 await send_config(client, service, service.config, response_topic)
-        if cmd == "get":
-            key = args["key"]
-            try:
-                config = service.config[key]
-            except KeyError:
-                msg = f"config.get error: key {key} not found."
-                await send_error(client, service, msg, response_topic)
-            else:
-                await send_config(client, service, config, response_topic)
-        if cmd == "set":
-            key = args["key"]
-            val = args["value"]
-            if isinstance(val, dict):
-                val = jsonargparse.Namespace(val)
-            service.config.update(val, key)
-            await send_config(client, service, service.config, response_topic)
-    except Exception as e:
-        msg = f"config error: {e}"
+    except Exception:
+        msg = f"ERROR config:\n{traceback.print_exc()}"
         await send_error(client, service, msg, response_topic)
 
 
