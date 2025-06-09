@@ -4,11 +4,11 @@ import os
 import pathlib
 import shutil
 import time
-from typing import Optional
+from typing import Any, Optional
 
 import aiomqtt
 import anyio
-import anyio.streams
+import jsonargparse
 from ruyaml import YAML
 
 DRF_RECORDING_DIR = os.getenv("DRF_RECORDING_DIR", "/data/ringbuffer")
@@ -21,19 +21,21 @@ class RecorderService:
     name: str = "recorder"
     recording_enabled: bool = False
     recording_scope: Optional[anyio.CancelScope] = None
-    configs: dict[str, str] = dataclasses.field(default_factory=dict)
-    active_config: Optional[str] = None
+    config: dict[str, Any] = dataclasses.field(default_factory=dict)
+    loadable_configs: dict[str, dict[str, Any]] = dataclasses.field(
+        default_factory=dict
+    )
 
 
 def load_configs(service, config_path=pathlib.Path("/app/configs")):
     config_paths = sorted(pathlib.Path(config_path).glob("*.yaml"))
     yaml = YAML(typ="safe")
     for p in config_paths:
-        service.configs[p.stem] = yaml.load(p)
-    if RECORDER_DEFAULT_CONFIG in service.configs:
-        service.active_config = RECORDER_DEFAULT_CONFIG
+        service.loadable_configs[p.stem] = jsonargparse.Namespace(yaml.load(p))
+    if RECORDER_DEFAULT_CONFIG in service.loadable_configs:
+        service.config = service.loadable_configs[RECORDER_DEFAULT_CONFIG]
     else:
-        service.active_config = list(service.configs.keys())[0]
+        service.config = list(service.loadable_configs.keys())[0]
 
 
 async def send_announce(client, service):
@@ -59,6 +61,26 @@ async def send_status(client, service):
         "timestamp": time.time(),
     }
     await client.publish(f"{service.name}/status", json.dumps(payload), retain=True)
+
+
+async def send_error(client, service, message, response_topic=None):
+    if response_topic is None:
+        response_topic = f"{service.name}/error"
+    payload = {
+        "message": message,
+        "timestamp": time.time(),
+    }
+    await client.publish(response_topic, json.dumps(payload), retain=True)
+
+
+async def send_config(client, service, config, response_topic=None):
+    if response_topic is None:
+        response_topic = f"{service.name}/config/response"
+    payload = {
+        "value": config.as_dict(),
+        "timestamp": time.time(),
+    }
+    await client.publish(response_topic, json.dumps(payload), retain=True)
 
 
 async def run_drf_mirror(service):
@@ -100,21 +122,25 @@ async def run_drf_ringbuffer_tmp(service):
         shutil.rmtree(DRF_TMP_RINGBUFFER_DIR, ignore_errors=True)
 
 
-async def run_recorder(service):
-    config = service.configs[service.active_config]
+async def run_recorder(client, service):
     command = [
         "python3",
         "/app/sdr_mep_recorder.py",
         "--config",
-        json.dumps(config),
+        json.dumps(service.config.as_dict()),
     ]
     with anyio.CancelScope() as scope:
         service.recording_scope = scope
         try:
+            await send_status(client, service)
             await anyio.run_process(command, stdout=None, stderr=None, check=False)
         finally:
-            channel_dir = pathlib.Path(config["drf_sink"]["channel_dir"])
+            channel_dir = pathlib.Path(service.config["drf_sink.channel_dir"])
             shutil.rmtree(channel_dir, ignore_errors=True)
+            service.recording_enabled = False
+            service.recording_scope = None
+            with anyio.CancelScope(shield=True):
+                await send_status(client, service)
 
 
 def disable_recording(service):
@@ -124,10 +150,45 @@ def disable_recording(service):
         service.recording_scope = None
 
 
-def enable_recording(service, task_group):
+def enable_recording(client, service, task_group):
     if not service.recording_enabled:
         service.recording_enabled = True
-        task_group.start_soon(run_recorder, service)
+        task_group.start_soon(run_recorder, client, service)
+
+
+async def process_config_command(client, service, payload):
+    cmd = payload["task_name"].removeprefix("config.")
+    args = payload.get("arguments", None)
+    response_topic = payload.get("response_topic", None)
+    try:
+        if cmd == "load":
+            config_name = args["name"]
+            try:
+                service.config = service.loadable_configs[config_name]
+            except KeyError:
+                msg = f"config.load error: configuration {config_name} not found."
+                await send_error(client, service, msg, response_topic)
+            else:
+                await send_config(client, service, service.config, response_topic)
+        if cmd == "get":
+            key = args["key"]
+            try:
+                config = service.config[key]
+            except KeyError:
+                msg = f"config.get error: key {key} not found."
+                await send_error(client, service, msg, response_topic)
+            else:
+                await send_config(client, service, config, response_topic)
+        if cmd == "set":
+            key = args["key"]
+            val = args["value"]
+            if isinstance(val, dict):
+                val = jsonargparse.Namespace(val)
+            service.config.update(val, key)
+            await send_config(client, service, service.config, response_topic)
+    except Exception as e:
+        msg = f"config error: {e}"
+        await send_error(client, service, msg, response_topic)
 
 
 async def process_commands(client, service, task_group):
@@ -141,6 +202,8 @@ async def process_commands(client, service, task_group):
             await send_status(client, service)
         if payload["task_name"] == "status":
             await send_status(client, service)
+        if payload["task_name"].startswith("config."):
+            await process_config_command(client, service, payload)
 
 
 async def main():
@@ -169,9 +232,7 @@ async def main():
                     tg.start_soon(run_drf_mirror, service)
                     tg.start_soon(run_drf_mirror_tmp, service)
                     tg.start_soon(run_drf_ringbuffer_tmp, service)
-                    enable_recording(service, tg)
-                    # update status after enabling recording
-                    tg.start_soon(send_status, client, service)
+                    enable_recording(client, service, tg)
                     tg.start_soon(process_commands, client, service, tg)
         except aiomqtt.MqttError:
             msg = (
