@@ -159,7 +159,7 @@ def enable_recording(client, service, task_group):
 
 async def process_config_command(client, service, payload):
     cmd = payload["task_name"].removeprefix("config.")
-    args = payload.get("arguments", None)
+    args = payload.get("arguments", {})
     response_topic = payload.get("response_topic", None)
     try:
         if cmd == "get":
@@ -200,7 +200,7 @@ async def process_config_command(client, service, payload):
             else:
                 await send_config(client, service, service.config, response_topic)
     except Exception:
-        msg = f"ERROR config:\n{traceback.print_exc()}"
+        msg = f"ERROR config:\n{traceback.format_exc()}"
         await send_error(client, service, msg, response_topic)
 
 
