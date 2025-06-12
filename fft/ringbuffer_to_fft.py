@@ -144,9 +144,11 @@ client.publish("announce/" + service_name, json.dumps(announce_packet), retain=T
 opened_flag = False
 while not opened_flag:
     try:
+        print(f"Opening DigitalRFReader for {DRF_RECORDING_DIR} on channel {DRF_FFT_CHANNEL}")
         reader = digital_rf.DigitalRFReader(DRF_RECORDING_DIR)
         opened_flag = True
-    except:
+    except Exception as e:
+        print(f"Error opening DigitalRFReader: {e}")
         time.sleep(60)
 
 prev_end_sample = 0
