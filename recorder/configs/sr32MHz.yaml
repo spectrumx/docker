@@ -22,7 +22,7 @@ pipeline:
   selector: false
   converter: true
   rotator: false
-  resampler0: true
+  resampler0: false
   resampler1: false
   resampler2: true
 
@@ -63,28 +63,19 @@ rotator:
     - start: 0
       freq: 0e+6
 
-resampler0:
+resampler2:
   up: 1
   down: 2
   outrate_cutoff: 1.0
-  # transition_width: 2 * (cutoff - 1 / remaining_dec)
-  #                   2 * (1.0 - 1 / 8) = 1.75
-  outrate_transition_width: 1.75
-  attenuation_db: 95
-
-resampler2:
-  up: 1
-  down: 8
-  outrate_cutoff: 1.0
   outrate_transition_width: 0.2
-  attenuation_db: 99.25
+  attenuation_db: 98.35
 
 drf_sink:
-  channel_dir: sr4MHz
+  channel_dir: sr32MHz
 
 metadata:
   receiver:
     description: "MEP recorder"
   processing:
-    decimation: 16
+    decimation: 2
     interpolation: 1
