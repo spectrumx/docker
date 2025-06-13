@@ -49,9 +49,11 @@ def on_message(client, userdata, msg):
     global disabled
     payload = json.loads(msg.payload.decode())
     if payload["task_name"] == "disable":
+        print("Disabling FFT service")
         disabled = True
         send_status(client)
     if payload["task_name"] == "enable":
+        print("Enabling FFT service")
         disabled = False
         send_status(client)
     if payload["task_name"] == "status":
@@ -89,7 +91,7 @@ def process_file(data):
         np.abs(np.fft.fft(data)).astype(np.float32).tobytes()
     ).decode("utf-8")  # Encode to base64 string
 
-    print(f"{len(data)} samples read")
+    # print(f"{len(data)} samples read")
     # Remove mac_address since we don't have full node population and it's breaking the website
     # "mac_address": "f4e11ea46780",
     payload = {
