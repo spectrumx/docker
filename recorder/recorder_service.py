@@ -115,7 +115,7 @@ async def run_drf_ringbuffer_tmp(service):
         "drf",
         "ringbuffer",
         "-l",
-        "2",
+        "1",
         DRF_TMP_RINGBUFFER_DIR,
     ]
     try:
