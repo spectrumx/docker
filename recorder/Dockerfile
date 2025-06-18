@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM ghcr.io/ryanvolz/holohub/rf-array:rf_array
+FROM ghcr.io/ryanvolz/holohub/rf-array:v1
 
 LABEL org.opencontainers.image.description="Holoscan MEP recorder"
 
