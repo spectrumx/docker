@@ -25,6 +25,7 @@ pipeline:
   resampler0: true
   resampler1: false
   resampler2: true
+  spectrogram: true
 
 packet:
   batch_size: &batch_size 6250 # Number of packets to process at once into tensor data
@@ -88,3 +89,22 @@ metadata:
   processing:
     decimation: 16
     interpolation: 1
+
+spectrogram:
+  window: hann
+  nperseg: 1000
+  noverlap: null
+  nfft: null
+  detrend: false
+  reduce_op: max
+  num_spectra_per_chunk: 4
+  num_chunks_per_output: 300
+  figsize:
+  - 6.4
+  - 4.8
+  dpi: 200
+  col_wrap: 1
+  cmap: viridis
+  snr_db_min: -10
+  snr_db_max: 40
+  plot_outdir: /data/ringbuffer/spectrograms

@@ -35,7 +35,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #
 # Install Python dependencies not covered by deb packages
 #
-RUN python3 -m pip install --no-cache-dir aiomqtt anyio digital-rf jsonargparse[ruyaml,signatures]
+RUN python3 -m pip install --no-cache-dir aiomqtt anyio digital-rf jsonargparse[ruyaml,signatures] matplotlib
 
 #
 # Set up environment variables
@@ -48,5 +48,6 @@ COPY --chmod=666 configs /app/configs
 COPY --chmod=775 recorder_service.py /app/recorder_service.py
 COPY --chmod=777 sdr_mep_recorder.py /app/sdr_mep_recorder.py
 
+ENV HOME=/ramdisk
 WORKDIR /ramdisk
 ENTRYPOINT ["python3", "/app/recorder_service.py"]
