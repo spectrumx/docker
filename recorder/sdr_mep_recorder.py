@@ -508,7 +508,7 @@ class Spectrogram(holoscan.core.Operator):
                 break
 
         timestr = spec_start_dt.strftime("%Y-%m-%dT%H:%M:%S")
-        freqstr = f"{self.prior_metadata.center_freq // 1e6:n}MHz"
+        freqstr = f"{self.prior_metadata.center_freq / 1e6:n}MHz"
         datestr = spec_start_dt.strftime("%Y-%m-%d")
 
         spec_power_db = 10 * np.log10(
