@@ -13,7 +13,8 @@ env:
   DOCKER_REGISTRY: ghcr.io
   IMAGE_CONTEXT: recorder
   IMAGE_DOCKERFILE: recorder/Dockerfile
-  IMAGE_NAME: ${{ github.repository }}/recorder
+  #IMAGE_NAME: ${{ github.repository }}/recorder
+  IMAGE_NAME: ryanvolz/mep-recorder
 
 jobs:
   build_docker_image:
