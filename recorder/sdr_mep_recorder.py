@@ -16,7 +16,6 @@
 # limitations under the License.
 
 import dataclasses
-import datetime
 import fractions
 import logging
 import os
@@ -24,6 +23,7 @@ import pathlib
 import signal
 import sys
 import tempfile
+import traceback
 import typing
 
 import cupy as cp
@@ -487,17 +487,25 @@ class Spectrogram(holoscan.core.Operator):
 
         self.logger.info(f"Outputting spectrogram for time {spec_start_dt}")
 
-        self.dmd_writer.write(
-            [spec_sample_idx],
-            [
-                {
-                    "spectrogram": output_spec_data.transpose((1, 0, 2)),
-                    "freq_idx": self.freq_idx + self.prior_metadata.center_freq,
-                    "sample_idx": sample_idx_arr,
-                    "center_freq": self.prior_metadata.center_freq,
-                }
-            ],
-        )
+        num_retries = 3
+        for retry in range(0, num_retries):
+            try:
+                self.dmd_writer.write(
+                    [spec_sample_idx],
+                    [
+                        {
+                            "spectrogram": output_spec_data.transpose((1, 0, 2)),
+                            "freq_idx": self.freq_idx + self.prior_metadata.center_freq,
+                            "sample_idx": sample_idx_arr,
+                            "center_freq": self.prior_metadata.center_freq,
+                        }
+                    ],
+                )
+            except IOError:
+                if retry == (num_retries - 1):
+                    self.logger.warning(traceback.format_exc())
+            else:
+                break
 
         timestr = spec_start_dt.strftime("%Y-%m-%dT%H:%M:%S")
         freqstr = f"{self.prior_metadata.center_freq // 1e6:n}MHz"
@@ -559,12 +567,7 @@ class Spectrogram(holoscan.core.Operator):
             self.dmd_writer = drf.DigitalMetadataWriter(
                 metadata_dir=str(self.data_outdir),
                 subdir_cadence_secs=3600,
-                file_cadence_secs=drf.util.samples_to_timedelta(
-                    self.num_chunks_per_output * self.chunk_size,
-                    np.longdouble(self.prior_metadata.sample_rate_numerator)
-                    / self.prior_metadata.sample_rate_denominator,
-                )
-                // datetime.timedelta(seconds=1),
+                file_cadence_secs=1,
                 sample_rate_numerator=self.prior_metadata.sample_rate_numerator,
                 sample_rate_denominator=self.prior_metadata.sample_rate_denominator,
                 file_name="spectrogram",
