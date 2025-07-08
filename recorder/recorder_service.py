@@ -10,6 +10,7 @@ from typing import Any, Optional
 
 import aiomqtt
 import anyio
+import exceptiongroup
 import jsonargparse
 from ruyaml import YAML
 
@@ -141,7 +142,9 @@ async def run_recorder(client, service):
             try:
                 await process.wait()
             finally:
-                process.send_signal(signal.SIGINT)
+                if process.returncode is None:
+                    # process is still running, stop it gracefully
+                    process.send_signal(signal.SIGINT)
                 channel_dir = pathlib.Path(service.config["drf_sink.channel_dir"])
                 shutil.rmtree(channel_dir, ignore_errors=True)
                 service.recording_enabled = False
@@ -228,6 +231,10 @@ async def process_commands(client, service, task_group):
             await process_config_command(client, service, payload)
 
 
+def err_handler(exc: exceptiongroup.BaseExceptionGroup) -> None:
+    traceback.print_exc()
+
+
 async def main():
     service = RecorderService()
     load_configs(service)
@@ -250,11 +257,16 @@ async def main():
                 await client.subscribe(f"{service.name}/command")
                 await send_announce(client, service)
                 await send_status(client, service)
-                async with anyio.create_task_group() as tg:
-                    tg.start_soon(run_drf_mirror, service)
-                    tg.start_soon(run_drf_mirror_tmp, service)
-                    tg.start_soon(run_drf_ringbuffer_tmp, service)
-                    tg.start_soon(process_commands, client, service, tg)
+                with exceptiongroup.catch(
+                    {
+                        Exception: err_handler,
+                    }
+                ):
+                    async with anyio.create_task_group() as tg:
+                        tg.start_soon(run_drf_mirror, service)
+                        tg.start_soon(run_drf_mirror_tmp, service)
+                        tg.start_soon(run_drf_ringbuffer_tmp, service)
+                        tg.start_soon(process_commands, client, service, tg)
         except aiomqtt.MqttError:
             msg = (
                 "Connection to MQTT server lost;"
