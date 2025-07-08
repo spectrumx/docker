@@ -231,10 +231,6 @@ async def process_commands(client, service, task_group):
             await process_config_command(client, service, payload)
 
 
-def err_handler(exc: exceptiongroup.BaseExceptionGroup) -> None:
-    traceback.print_exc()
-
-
 async def main():
     service = RecorderService()
     load_configs(service)
@@ -259,7 +255,7 @@ async def main():
                 await send_status(client, service)
                 with exceptiongroup.catch(
                     {
-                        Exception: err_handler,
+                        Exception: lambda exc: traceback.print_exc(),
                     }
                 ):
                     async with anyio.create_task_group() as tg:
