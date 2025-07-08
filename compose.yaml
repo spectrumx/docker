@@ -80,7 +80,7 @@ services:
       - /data/ringbuffer:/data/ringbuffer
 
   recorder:
-    image: ghcr.io/spectrumx/docker/recorder:latest
+    image: ghcr.io/spectrumx/docker/recorder:sha256-535a3753bddc5b17b89ac0837a36854d1abfb841ad9a55afde0cace54a149367
     build: ./recorder
     container_name: recorder
     environment:
