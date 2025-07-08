@@ -80,7 +80,7 @@ services:
       - /data/ringbuffer:/data/ringbuffer
 
   recorder:
-    image: ghcr.io/ryanvolz/mep-recorder:latest
+    image: ghcr.io/spectrumx/docker/recorder:latest
     build: ./recorder
     container_name: recorder
     environment:
