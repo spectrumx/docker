@@ -410,7 +410,7 @@ class Spectrogram(holoscan.core.Operator):
             axs_1d.append(ax)
             ref_lvl_texts.append(ref_lvl_text)
         axs_1d[-1].set_xlabel("Time (UTC)")
-        fig.suptitle("Spectrogram")
+        self.suptitle = fig.suptitle("Spectrogram", fontsize="medium")
         fig.autofmt_xdate(rotation=0, ha="center")
 
         self.fig = fig
@@ -546,7 +546,7 @@ class Spectrogram(holoscan.core.Operator):
             self.ref_lvl_texts[sch].set_text(
                 f"Ref: {float(reference_pwr[0, sch, 0]):.3n} [$V_{{ADC}}^2$]"
             )
-        self.fig.suptitle(
+        self.suptitle.set_text(
             f"{self.data_outdir.parent.name}/{self.data_outdir.name} @ {freqstr}"
         )
         self.fig.canvas.draw()
