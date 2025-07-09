@@ -391,9 +391,9 @@ class Spectrogram(holoscan.core.Operator):
             cb.set_label("Power relative to reference [dB]")
             ax.set_ylabel("Frequency [MHz]")
             if self.num_subchannels > 1:
-                title = ax.set_title(f"Subchannel {sch}")
+                title = ax.set_title(f"Subchannel {sch}", fontsize="small")
             else:
-                title = ax.set_title(" ")
+                title = ax.set_title(" ", fontsize="small")
             ref_lvl_text = ax.text(
                 1.0,
                 title.get_position()[1],
