@@ -397,8 +397,8 @@ class Spectrogram(holoscan.core.Operator):
             ref_lvl_text = ax.text(
                 1.0,
                 title.get_position()[1],
-                "Ref: 1234.56 [$V_{ADC}^2$]",
-                fontsize="medium",
+                "Ref: 1.23e-9 [$V_{ADC}^2$]",
+                fontsize="small",
                 fontstyle="italic",
                 va=title.get_verticalalignment(),
                 ha="right",
@@ -544,7 +544,7 @@ class Spectrogram(holoscan.core.Operator):
                 extent=extent,
             )
             self.ref_lvl_texts[sch].set_text(
-                f"Ref: {float(reference_pwr[sch]):n} [$V_{{ADC}}^2$]"
+                f"Ref: {float(reference_pwr[0, sch, 0]):.3n} [$V_{{ADC}}^2$]"
             )
         self.fig.suptitle(
             f"{self.data_outdir.parent.name}/{self.data_outdir.name} @ {freqstr}"
