@@ -544,7 +544,7 @@ class Spectrogram(holoscan.core.Operator):
                 extent=extent,
             )
             self.ref_lvl_texts[sch].set_text(
-                f"Ref: {reference_pwr[sch]:n} [$V_{{ADC}}^2$]"
+                f"Ref: {float(reference_pwr[sch]):n} [$V_{{ADC}}^2$]"
             )
         self.fig.suptitle(
             f"{self.data_outdir.parent.name}/{self.data_outdir.name} @ {freqstr}"
