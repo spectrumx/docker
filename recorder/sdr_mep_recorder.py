@@ -369,6 +369,7 @@ class Spectrogram(holoscan.core.Operator):
             figsize=self.figsize,
             dpi=self.dpi,
         )
+        fig.get_layout_engine().set(w_pad=1 / 72, h_pad=1 / 72)
         self.norm = mpl.colors.Normalize(vmin=self.snr_db_min, vmax=self.snr_db_max)
         xlocator = mpl.dates.AutoDateLocator(minticks=3, maxticks=7)
         xformatter = mpl.dates.ConciseDateFormatter(xlocator)
