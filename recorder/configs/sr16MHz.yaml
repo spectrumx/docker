@@ -32,7 +32,7 @@ packet:
   max_packet_size: &max_packet_size 8256
   num_subchannels: &num_subchannels 1 # Number of IQ subchannels of data that form a sample
   num_samples: &rx_chunk_size 12800000 # Number of samples to output as a single chunk, must fit one batch of packets
-  buffer_size: 10 # Number of num_samples chunks to store in the rx buffer
+  buffer_size: 20 # Number of num_samples chunks to store in the rx buffer
   freq_idx_scaling: 1000
   freq_idx_offset: 0
   spoof_header: false
@@ -96,6 +96,6 @@ spectrogram:
   dpi: 200
   col_wrap: 1
   cmap: viridis
-  snr_db_min: -10
-  snr_db_max: 40
+  snr_db_min: -5
+  snr_db_max: 20
   plot_outdir: /data/ringbuffer/spectrograms
