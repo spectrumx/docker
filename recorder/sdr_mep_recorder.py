@@ -84,6 +84,10 @@ class PipelineParams:
     "Enable / disable the second stage resampler"
     resampler2: bool = True
     "Enable / disable the third stage resampler"
+    int_converter: bool = True
+    "Enable / disable complex float to int converter"
+    digital_rf: bool = True
+    "Enable / disable writing output to Digital RF"
     spectrogram: bool = True
     "Enable / disable spectrogram processing and output"
 
@@ -615,7 +619,7 @@ class Spectrogram(holoscan.core.Operator):
         )
         self.logger.debug(msg)
 
-        with cp.cuda.ExternalStream(rf_array.stream):
+        with cp.cuda.ExternalStream(rf_array.stream) as stream:
             for chunk_spectrum_idx, spectrum_chunk in enumerate(
                 cp.split(rf_data, self.num_spectra_per_chunk, axis=0)
             ):
@@ -645,6 +649,7 @@ class Spectrogram(holoscan.core.Operator):
                     ],
                     blocking=False,
                 )
+            stream.synchronize()
 
         if chunk_idx == (self.num_chunks_per_output - 1):
             self.write_output()
@@ -749,41 +754,57 @@ class App(holoscan.core.Application):
                     last_chunk_shape[1],
                 )
 
-            drf_sink = rf_array.DigitalRFSink_fc32(
-                self,
-                name="drf_sink",
-                **add_chunk_kwargs(last_chunk_shape, **self.kwargs("drf_sink")),
-            )
-            self.add_flow(last_op, drf_sink)
+            if self.kwargs("pipeline")["spectrogram"]:
+                spectrogram = Spectrogram(
+                    self,
+                    name="spectrogram",
+                    data_outdir=(
+                        f"{DRF_RECORDING_DIR}/{self.kwargs('drf_sink')['channel_dir']}"
+                        "_spectrogram"
+                    ),
+                    **add_chunk_kwargs(last_chunk_shape, **self.kwargs("spectrogram")),
+                )
+                self.add_flow(last_op, spectrogram)
 
-        else:
-            drf_sink = rf_array.DigitalRFSink_sc16(
-                self,
-                name="drf_sink",
-                **add_chunk_kwargs(last_chunk_shape, **self.kwargs("drf_sink")),
-            )
-            self.add_flow(last_op, drf_sink)
+            if self.kwargs("pipeline")["int_converter"]:
+                int_converter = rf_array.TypeConversionComplexFloatToInt(
+                    self,
+                    name="int_converter",
+                )
+                self.add_flow(last_op, int_converter)
+                last_op = int_converter
 
-        dmd_sink = DigitalMetadataSink(
-            self,
-            name="dmd_sink",
-            metadata_dir=f"{self.kwargs('drf_sink')['channel_dir']}/metadata",
-            subdir_cadence_secs=self.kwargs("drf_sink")["subdir_cadence_secs"],
-            file_cadence_secs=self.kwargs("drf_sink")["file_cadence_millisecs"] // 1000,
-            uuid=self.kwargs("drf_sink")["uuid"],
-            filename_prefix="metadata",
-            metadata=self.kwargs("metadata"),
-        )
-        self.add_flow(last_op, dmd_sink)
+        if self.kwargs("pipeline")["digital_rf"]:
+            if (
+                self.kwargs("pipeline")["converter"]
+                and not self.kwargs("pipeline")["int_converter"]
+            ):
+                drf_sink = rf_array.DigitalRFSink_fc32(
+                    self,
+                    name="drf_sink",
+                    **add_chunk_kwargs(last_chunk_shape, **self.kwargs("drf_sink")),
+                )
+                self.add_flow(last_op, drf_sink)
+            else:
+                drf_sink = rf_array.DigitalRFSink_sc16(
+                    self,
+                    name="drf_sink",
+                    **add_chunk_kwargs(last_chunk_shape, **self.kwargs("drf_sink")),
+                )
+                self.add_flow(last_op, drf_sink)
 
-        if self.kwargs("pipeline")["spectrogram"]:
-            spectrogram = Spectrogram(
+            dmd_sink = DigitalMetadataSink(
                 self,
-                name="spectrogram",
-                data_outdir=f"{DRF_RECORDING_DIR}/{self.kwargs('drf_sink')['channel_dir']}_spectrogram",
-                **add_chunk_kwargs(last_chunk_shape, **self.kwargs("spectrogram")),
+                name="dmd_sink",
+                metadata_dir=f"{self.kwargs('drf_sink')['channel_dir']}/metadata",
+                subdir_cadence_secs=self.kwargs("drf_sink")["subdir_cadence_secs"],
+                file_cadence_secs=self.kwargs("drf_sink")["file_cadence_millisecs"]
+                // 1000,
+                uuid=self.kwargs("drf_sink")["uuid"],
+                filename_prefix="metadata",
+                metadata=self.kwargs("metadata"),
             )
-            self.add_flow(last_op, spectrogram)
+            self.add_flow(last_op, dmd_sink)
 
 
 def main():

@@ -25,6 +25,8 @@ pipeline:
   resampler0: true
   resampler1: false
   resampler2: true
+  int_converter: false
+  digital_rf: true
   spectrogram: true
 
 packet:
