@@ -766,6 +766,7 @@ class App(holoscan.core.Application):
                 )
                 self.add_flow(last_op, spectrogram)
 
+            last_float_op = last_op
             if self.kwargs("pipeline")["int_converter"]:
                 int_converter = rf_array.TypeConversionComplexFloatToInt(
                     self,
@@ -804,7 +805,7 @@ class App(holoscan.core.Application):
                 filename_prefix="metadata",
                 metadata=self.kwargs("metadata"),
             )
-            self.add_flow(last_op, dmd_sink)
+            self.add_flow(last_float_op, dmd_sink)
 
 
 def main():
