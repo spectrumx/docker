@@ -44,7 +44,6 @@ ENV HOLOSCAN_EXECUTOR_LOG_LEVEL=WARN
 ENV HOLOSCAN_LOG_LEVEL=INFO
 ENV HOLOSCAN_LOG_FORMAT=DEFAULT
 
-COPY --chmod=666 configs /app/configs
 COPY --chmod=775 recorder_service.py /app/recorder_service.py
 COPY --chmod=777 sdr_mep_recorder.py /app/sdr_mep_recorder.py
 
