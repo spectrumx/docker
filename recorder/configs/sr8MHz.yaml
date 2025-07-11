@@ -37,6 +37,7 @@ packet:
   buffer_size: 12 # Number of num_samples chunks to store in the rx buffer
   freq_idx_scaling: 1000
   freq_idx_offset: 0
+  apply_conjugate: false
   spoof_header: false
   packet_skip_bytes: 64
   header_metadata:
