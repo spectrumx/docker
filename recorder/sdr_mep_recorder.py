@@ -575,7 +575,6 @@ class Spectrogram(holoscan.core.Operator):
         context: holoscan.core.ExecutionContext,
     ):
         rf_array = op_input.receive("rf_in")
-        rf_data = cp.from_dlpack(rf_array.data)
         rf_metadata = rf_array.metadata
 
         if (rf_metadata.sample_idx - self.last_seen_sample_idx) > (
@@ -620,6 +619,7 @@ class Spectrogram(holoscan.core.Operator):
         self.logger.debug(msg)
 
         with cp.cuda.ExternalStream(rf_array.stream) as stream:
+            rf_data = cp.from_dlpack(rf_array.data)
             for chunk_spectrum_idx, spectrum_chunk in enumerate(
                 cp.split(rf_data, self.num_spectra_per_chunk, axis=0)
             ):
