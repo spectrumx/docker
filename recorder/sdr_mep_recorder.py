@@ -244,10 +244,10 @@ class Spectrogram(holoscan.core.Operator):
     def __init__(
         self,
         fragment,
+        *args,
         chunk_size,
         num_subchannels,
         data_outdir,
-        *args,
         window="hann",
         nperseg=1024,
         noverlap=None,
@@ -355,10 +355,7 @@ class Spectrogram(holoscan.core.Operator):
         self.logger = logging.getLogger("Spectrogram")
 
     def setup(self, spec: holoscan.core.OperatorSpec):
-        spec.input("rf_in").connector(
-            holoscan.core.IOSpec.ConnectorType.DOUBLE_BUFFER,
-            capacity=100,
-        )
+        spec.input("rf_in")
 
     def create_spec_figure(self):
         ncols = min(self.col_wrap, self.num_subchannels)
@@ -574,8 +571,13 @@ class Spectrogram(holoscan.core.Operator):
         op_output: holoscan.core.OutputContext,
         context: holoscan.core.ExecutionContext,
     ):
-        rf_array = op_input.receive("rf_in")
-        rf_metadata = rf_array.metadata
+        rf_message = op_input.receive("rf_in")
+        stream_ptr = op_input.receive_cuda_stream("rf_in", allocate=True)
+        for rf_arr in rf_message:
+            self.compute_one(rf_arr, stream_ptr)
+
+    def compute_one(self, rf_arr, stream_ptr):
+        rf_metadata = rf_arr.metadata
 
         if (rf_metadata.sample_idx - self.last_seen_sample_idx) > (
             self.num_chunks_per_output * self.chunk_size
@@ -618,8 +620,8 @@ class Spectrogram(holoscan.core.Operator):
         )
         self.logger.debug(msg)
 
-        with cp.cuda.ExternalStream(rf_array.stream) as stream:
-            rf_data = cp.from_dlpack(rf_array.data)
+        with cp.cuda.ExternalStream(stream_ptr) as stream:
+            rf_data = cp.from_dlpack(rf_arr.data)
             for chunk_spectrum_idx, spectrum_chunk in enumerate(
                 cp.split(rf_data, self.num_spectra_per_chunk, axis=0)
             ):
@@ -649,8 +651,14 @@ class Spectrogram(holoscan.core.Operator):
                     ],
                     blocking=False,
                 )
-            stream.synchronize()
+            stream.launch_host_func(self.chunk_completed_callback, chunk_idx)
 
+    def chunk_completed_callback(self, chunk_idx):
+        chunk_spec = self.spec_host_data[
+            ...,
+            chunk_idx * self.num_spectra_per_chunk : (chunk_idx + 1)
+            * self.num_spectra_per_chunk,
+        ]
         if chunk_idx == (self.num_chunks_per_output - 1):
             self.write_output()
 
@@ -757,6 +765,12 @@ class App(holoscan.core.Application):
             if self.kwargs("pipeline")["spectrogram"]:
                 spectrogram = Spectrogram(
                     self,
+                    holoscan.conditions.MessageAvailableCondition(
+                        self, receiver="rf_in", name="spectrogram_message_available"
+                    ),
+                    holoscan.conditions.CudaStreamCondition(
+                        self, receiver="rf_in", name="spectrogram_stream_sync"
+                    ),
                     name="spectrogram",
                     data_outdir=(
                         f"{DRF_RECORDING_DIR}/{self.kwargs('drf_sink')['channel_dir']}"
@@ -782,6 +796,12 @@ class App(holoscan.core.Application):
             ):
                 drf_sink = rf_array.DigitalRFSink_fc32(
                     self,
+                    holoscan.conditions.MessageAvailableCondition(
+                        self, receiver="rf_in", name="drf_sink_message_available"
+                    ),
+                    holoscan.conditions.CudaStreamCondition(
+                        self, receiver="rf_in", name="drf_sink_stream_sync"
+                    ),
                     name="drf_sink",
                     **add_chunk_kwargs(last_chunk_shape, **self.kwargs("drf_sink")),
                 )
@@ -789,6 +809,12 @@ class App(holoscan.core.Application):
             else:
                 drf_sink = rf_array.DigitalRFSink_sc16(
                     self,
+                    holoscan.conditions.MessageAvailableCondition(
+                        self, receiver="rf_in", name="drf_sink_message_available"
+                    ),
+                    holoscan.conditions.CudaStreamCondition(
+                        self, receiver="rf_in", name="drf_sink_stream_sync"
+                    ),
                     name="drf_sink",
                     **add_chunk_kwargs(last_chunk_shape, **self.kwargs("drf_sink")),
                 )
