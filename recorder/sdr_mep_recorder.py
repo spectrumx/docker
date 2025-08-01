@@ -464,6 +464,17 @@ class Spectrogram(holoscan.core.Operator):
         self.dmd_writer = None
         self.chunk_rate_frac = None
 
+        # warm up CUDA calculation and extract an FFT plan
+        self.calc_spectrogram_chunk(
+            cp.ones((self.chunk_size, self.num_subchannels), dtype="complex64"),
+            0,
+        )
+        plan_cache = cp.fft.config.get_plan_cache()
+        print(plan_cache)
+        for key, node in plan_cache:
+            self.cufft_plan = node.plan
+        print(self.cufft_plan)
+
     def set_metadata(self, rf_metadata):
         self.prior_metadata = rf_metadata
         self.freq_idx = np.fft.fftshift(
@@ -643,36 +654,40 @@ class Spectrogram(holoscan.core.Operator):
 
         with cp.cuda.ExternalStream(stream_ptr) as stream:
             rf_data = cp.from_dlpack(rf_arr.data)
-            for chunk_spectrum_idx, spectrum_chunk in enumerate(
-                cp.split(rf_data, self.num_spectra_per_chunk, axis=0)
-            ):
-                _freqs, sidxs, Zxx = cpss.stft(
-                    spectrum_chunk,
-                    fs=1,
-                    window=self.window,
-                    nperseg=self.nperseg,
-                    noverlap=self.noverlap,
-                    nfft=self.nfft,
-                    detrend=self.detrend,
-                    return_onesided=False,
-                    boundary=None,
-                    padded=True,
-                    axis=0,
-                    scaling="spectrum",
-                )
-                # reduce over time axis
-                spec = cp.fft.fftshift(
-                    self.reduce_op(Zxx.real**2 + Zxx.imag**2, axis=-1), axes=0
-                )
+            with self.cufft_plan:
+                self.calc_spectrogram_chunk(rf_data, chunk_idx)
+            #stream.launch_host_func(self.chunk_completed_callback, chunk_idx)
 
-                cp.asnumpy(
-                    spec,
-                    out=self.spec_host_data[
-                        ..., chunk_idx * self.num_spectra_per_chunk + chunk_spectrum_idx
-                    ],
-                    blocking=False,
-                )
-            stream.launch_host_func(self.chunk_completed_callback, chunk_idx)
+    def calc_spectrogram_chunk(self, rf_data, chunk_idx):
+        for chunk_spectrum_idx, spectrum_chunk in enumerate(
+            cp.split(rf_data, self.num_spectra_per_chunk, axis=0)
+        ):
+            _freqs, sidxs, Zxx = cpss.stft(
+                spectrum_chunk,
+                fs=1,
+                window=self.window,
+                nperseg=self.nperseg,
+                noverlap=self.noverlap,
+                nfft=self.nfft,
+                detrend=self.detrend,
+                return_onesided=False,
+                boundary=None,
+                padded=True,
+                axis=0,
+                scaling="spectrum",
+            )
+            # reduce over time axis
+            spec = cp.fft.fftshift(
+                self.reduce_op(Zxx.real**2 + Zxx.imag**2, axis=-1), axes=0
+            )
+
+            cp.asnumpy(
+                spec,
+                out=self.spec_host_data[
+                    ..., chunk_idx * self.num_spectra_per_chunk + chunk_spectrum_idx
+                ],
+                blocking=False,
+            )
 
     def chunk_completed_callback(self, chunk_idx):
         chunk_spec = self.spec_host_data[
