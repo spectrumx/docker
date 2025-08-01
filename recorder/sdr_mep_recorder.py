@@ -708,7 +708,7 @@ class App(holoscan.core.Application):
         )
 
         net_connector_rx = rf_array.NetConnectorBasic(
-            self, name="net_connector_rx", **self.kwargs("packet")
+            self, cuda_stream_pool, name="net_connector_rx", **self.kwargs("packet")
         )
         self.add_flow(basic_net_rx, net_connector_rx, {("burst_out", "burst_in")})
 
