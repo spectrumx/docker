@@ -49,7 +49,28 @@ from jsonargparse.typing import NonNegativeInt, PositiveInt
 
 mpl.use("agg")
 
-logger = logging.getLogger("sdr_mep_recorder.py")
+# set up Holoscan logger
+env_log_level = os.environ.get("HOLOSCAN_LOG_LEVEL", "WARN").upper()
+log_level_map = {
+    "OFF": "NOTSET",
+    "CRITICAL": "CRITICAL",
+    "ERROR": "ERROR",
+    "WARN": "WARNING",
+    "INFO": "INFO",
+    "DEBUG": "DEBUG",
+    "TRACE": "DEBUG",
+}
+log_level = log_level_map[env_log_level]
+holoscan_handler = logging.StreamHandler()
+holoscan_handler.setFormatter(logging.Formatter(
+    fmt="[{levelname}] [{filename}:{lineno}] {message}",
+    style="{",
+))
+holoscan_handler.setLevel(log_level)
+holoscan_logger = logging.getLogger("holoscan")
+holoscan_logger.setLevel(log_level)
+holoscan_logger.propagate = False
+holoscan_logger.addHandler(holoscan_handler)
 
 jsonargparse.set_parsing_settings(docstring_parse_attribute_docstrings=True)
 
@@ -352,7 +373,7 @@ class Spectrogram(holoscan.core.Operator):
         self.plot_outdir = pathlib.Path(plot_outdir).resolve()
 
         super().__init__(fragment, *args, **kwargs)
-        self.logger = logging.getLogger("Spectrogram")
+        self.logger = logging.getLogger("holoscan.sdr_mep_recorder.spectrogram")
 
     def setup(self, spec: holoscan.core.OperatorSpec):
         spec.input("rf_in")
@@ -851,18 +872,7 @@ def main():
     parser = build_config_parser()
     cfg = parser.parse_args()
 
-    env_log_level = os.environ.get("HOLOSCAN_LOG_LEVEL", "WARN").upper()
-    log_level_map = {
-        "OFF": "NOTSET",
-        "CRITICAL": "CRITICAL",
-        "ERROR": "ERROR",
-        "WARN": "WARNING",
-        "INFO": "INFO",
-        "DEBUG": "DEBUG",
-        "TRACE": "DEBUG",
-    }
-    log_level = log_level_map[env_log_level]
-    logging.basicConfig(level=log_level, force=True)
+    logger = logging.getLogger("holoscan.sdr_mep_recorder")
 
     # We have a parsed configuration (using jsonargparse), but the holoscan app wants
     # to read all of its configuration parameters from a YAML file, so we write out
