@@ -656,7 +656,14 @@ class Spectrogram(holoscan.core.Operator):
             rf_data = cp.from_dlpack(rf_arr.data)
             with self.cufft_plan:
                 self.calc_spectrogram_chunk(rf_data, chunk_idx)
-            #stream.launch_host_func(self.chunk_completed_callback, chunk_idx)
+            stream.synchronize()
+        #chunk_spec = self.spec_host_data[
+            #...,
+            #chunk_idx * self.num_spectra_per_chunk : (chunk_idx + 1)
+            #* self.num_spectra_per_chunk,
+        #]
+        if chunk_idx == (self.num_chunks_per_output - 1):
+            self.write_output()
 
     def calc_spectrogram_chunk(self, rf_data, chunk_idx):
         for chunk_spectrum_idx, spectrum_chunk in enumerate(
@@ -689,15 +696,6 @@ class Spectrogram(holoscan.core.Operator):
                 blocking=False,
             )
 
-    def chunk_completed_callback(self, chunk_idx):
-        chunk_spec = self.spec_host_data[
-            ...,
-            chunk_idx * self.num_spectra_per_chunk : (chunk_idx + 1)
-            * self.num_spectra_per_chunk,
-        ]
-        if chunk_idx == (self.num_chunks_per_output - 1):
-            self.write_output()
-
     def stop(self):
         msg = (
             "Stopping spectrogram operator with "
@@ -719,11 +717,38 @@ class App(holoscan.core.Application):
         )
 
         basic_net_rx = basic_network.BasicNetworkOpRx(
-            self, name="basic_network_rx", **self.kwargs("basic_network")
+            self,
+            # add condition (which does nothing) to cancel default condition
+            # that would have required space for 1 message in downstream buffer
+            holoscan.conditions.DownstreamMessageAffordableCondition(
+                self,
+                min_size=0,
+                transmitter="burst_out",
+                name="basic_network_out_condition",
+            ),
+            name="basic_network_rx",
+            **self.kwargs("basic_network"),
+        )
+        # drop old packets rather than get backed up by slow downstream operators
+        basic_net_rx.queue_policy(
+            port_name="burst_out",
+            port_type=holoscan.core.IOSpec.IOType.OUTPUT,
+            policy=holoscan.core.IOSpec.QueuePolicy.POP,
         )
 
+        packet_kwargs = self.kwargs("packet")
         net_connector_rx = rf_array.NetConnectorBasic(
-            self, cuda_stream_pool, name="net_connector_rx", **self.kwargs("packet")
+            self,
+            cuda_stream_pool,
+            name="net_connector_rx",
+            **packet_kwargs,
+        )
+        logger = logging.getLogger("holoscan.sdr_mep_recorder")
+        logger.info("Setting burst_in from compose()")
+        net_connector_rx.spec.inputs["burst_in"].connector(
+            holoscan.core.IOSpec.ConnectorType.DOUBLE_BUFFER,
+            capacity=packet_kwargs.get("batch_capacity", 4),
+            policy=0,  # pop
         )
         self.add_flow(basic_net_rx, net_connector_rx, {("burst_out", "burst_in")})
 
@@ -817,6 +842,7 @@ class App(holoscan.core.Application):
                     holoscan.conditions.CudaStreamCondition(
                         self, receiver="rf_in", name="spectrogram_stream_sync"
                     ),
+                    # no downstream condition, and we don't want one
                     cuda_stream_pool,
                     name="spectrogram",
                     data_outdir=(
@@ -825,6 +851,13 @@ class App(holoscan.core.Application):
                     ),
                     **add_chunk_kwargs(last_chunk_shape, **self.kwargs("spectrogram")),
                 )
+                # drop old messages rather than get backed up by slow
+                # downstream operators
+                #spectrogram.queue_policy(
+                    #port_name="spec_out",
+                    #port_type=holoscan.core.IOSpec.IOType.OUTPUT,
+                    #policy=holoscan.core.IOSpec.QueuePolicy.POP,
+                #)
                 self.add_flow(last_op, spectrogram)
 
             if self.kwargs("pipeline")["int_converter"]:
