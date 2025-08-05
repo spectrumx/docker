@@ -470,10 +470,8 @@ class Spectrogram(holoscan.core.Operator):
             0,
         )
         plan_cache = cp.fft.config.get_plan_cache()
-        print(plan_cache)
         for key, node in plan_cache:
             self.cufft_plan = node.plan
-        print(self.cufft_plan)
 
     def set_metadata(self, rf_metadata):
         self.prior_metadata = rf_metadata
@@ -603,12 +601,8 @@ class Spectrogram(holoscan.core.Operator):
         op_output: holoscan.core.OutputContext,
         context: holoscan.core.ExecutionContext,
     ):
-        rf_message = op_input.receive("rf_in")
+        rf_arr = op_input.receive("rf_in")
         stream_ptr = op_input.receive_cuda_stream("rf_in", allocate=True)
-        for rf_arr in rf_message:
-            self.compute_one(rf_arr, stream_ptr)
-
-    def compute_one(self, rf_arr, stream_ptr):
         rf_metadata = rf_arr.metadata
 
         if (rf_metadata.sample_idx - self.last_seen_sample_idx) > (
@@ -743,8 +737,6 @@ class App(holoscan.core.Application):
             name="net_connector_rx",
             **packet_kwargs,
         )
-        logger = logging.getLogger("holoscan.sdr_mep_recorder")
-        logger.info("Setting burst_in from compose()")
         net_connector_rx.spec.inputs["burst_in"].connector(
             holoscan.core.IOSpec.ConnectorType.DOUBLE_BUFFER,
             capacity=packet_kwargs.get("batch_capacity", 4),
