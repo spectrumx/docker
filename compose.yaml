@@ -111,7 +111,7 @@ services:
     user: ${UID}:${GID}
     volumes:
       - /data:/data
-      - ./recorder/configs:/app/configs
+      - ./recorder:/app
 
 volumes:
     mongodb:
