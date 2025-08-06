@@ -30,11 +30,12 @@ pipeline:
   spectrogram: true
 
 packet:
-  batch_size: &batch_size 6250 # Number of packets to process at once into tensor data
+  batch_size: &batch_size 625 # Number of packets to process at once into tensor data
+  batch_capacity: 5 # Number of batches that can be queued and processed at once
   max_packet_size: &max_packet_size 8256
   num_subchannels: &num_subchannels 1 # Number of IQ subchannels of data that form a sample
-  num_samples: &rx_chunk_size 12800000 # Number of samples to output as a single chunk, must fit one batch of packets
-  buffer_size: 12 # Number of num_samples chunks to store in the rx buffer
+  num_samples: &rx_chunk_size 6400000 # Number of samples to output as a single chunk, must fit one batch of packets
+  buffer_size: 4 # Number of num_samples chunks to store in the rx buffer
   freq_idx_scaling: 1000
   freq_idx_offset: 0
   apply_conjugate: false
@@ -91,8 +92,10 @@ spectrogram:
   nfft: null
   detrend: false
   reduce_op: max
-  num_spectra_per_chunk: 4
-  num_chunks_per_output: 300
+  num_spectra_per_chunk: 1
+
+spectrogram_output:
+  num_spectra_per_output: 600
   figsize:
   - 6.4
   - 4.8

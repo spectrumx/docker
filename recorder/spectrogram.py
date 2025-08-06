@@ -16,6 +16,7 @@
 # limitations under the License.
 
 import dataclasses
+import datetime
 import fractions
 import logging
 import os
@@ -27,6 +28,7 @@ import cupy as cp
 import cupyx
 import cupyx.scipy.signal as cpss
 import digital_rf as drf
+import h5py
 import holoscan
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -35,6 +37,37 @@ import numpy as np
 mpl.use("agg")
 
 DRF_RECORDING_DIR = os.getenv("DRF_RECORDING_DIR", "/data/ringbuffer")
+
+
+def timestamp_floor(nsamples, sample_rate_frac):
+    """Convert number of samples into a (sec, picosec) tuple using a given sample rate"""
+    srn = sample_rate_frac.numerator
+    srd = sample_rate_frac.denominator
+    # calculate with divide/modulus split to avoid overflow
+    # second = s * d // n == ((s // n) * d) + ((si % n) * d) // n
+    tmp_div = nsamples // srn
+    tmp_mod = nsamples % srn
+    second = tmp_div * srd
+    tmp = tmp_mod * srd
+    tmp_div = tmp // srn
+    tmp_mod = tmp % srn
+    second += tmp_div
+    # picoseconds calculated from remainder of division to calculate seconds
+    # picosecond = rem * 1e12 // n = rem * (1e12 // n) + (rem * (1e12 % n)) // n
+    tmp = tmp_mod
+    tmp_div = 1_000_000_000_000 // srn
+    tmp_mod = 1_000_000_000_000 % srn
+    picosecond = (tmp * tmp_div) + ((tmp * tmp_mod) // srn)
+
+    return second, picosecond
+
+
+@dataclasses.dataclass
+class RFMetadata:
+    sample_idx: int
+    sample_rate_numerator: int
+    sample_rate_denominator: int
+    center_freq: int
 
 
 @dataclasses.dataclass
@@ -59,28 +92,11 @@ class SpectrogramParams:
     """Operation to use to reduce segment spectra to one result per chunk. ["max", "median", or "mean"]"""
     num_spectra_per_chunk: int = 1
     """Number of spectra samples to calculate per chunk of data. Must evenly divide `chunk_size`."""
-    num_chunks_per_output: int = 300
-    """Number of chunks to combine in a single output, either a data sample or plot"""
-    figsize: tuple[float, float] = (6.4, 4.8)
-    """Figure size in inches given as a tuple of (width, height)"""
-    dpi: int = 150
-    """Figure dots per inch"""
-    col_wrap: int = 1
-    """Number of columns of spectrograms to use in the figure, wrapping to new rows"""
-    cmap: str = "viridis"
-    """Colormap"""
-    snr_db_min: float = -10
-    """Spectrogram color scale minimum, given as SNR in decibels"""
-    snr_db_max: float = 40
-    """Spectrogram color scale maximum, given as SNR in decibels"""
-    plot_outdir: os.PathLike = f"{DRF_RECORDING_DIR}/spectrograms"
-    """Directory for writing spectrogram plots"""
 
 
 class Spectrogram(holoscan.core.Operator):
     chunk_size: int
     num_subchannels: int
-    data_outdir = os.PathLike
     window: str
     nperseg: int
     noverlap: typing.Optional[int]
@@ -92,14 +108,7 @@ class Spectrogram(holoscan.core.Operator):
         typing.Literal["max"], typing.Literal["median"], typing.Literal["mean"]
     ]
     num_spectra_per_chunk: int
-    num_chunks_per_output: int
-    figsize: tuple[float, float]
-    dpi: int
-    col_wrap: int
-    cmap: str
-    snr_db_min: float
-    snr_db_max: float
-    plot_outdir: os.PathLike
+    spec_sample_cadence: int
 
     def __init__(
         self,
@@ -107,7 +116,6 @@ class Spectrogram(holoscan.core.Operator):
         *args,
         chunk_size,
         num_subchannels,
-        data_outdir,
         window="hann",
         nperseg=1024,
         noverlap=None,
@@ -115,14 +123,6 @@ class Spectrogram(holoscan.core.Operator):
         detrend=False,
         reduce_op="max",
         num_spectra_per_chunk=1,
-        num_chunks_per_output=300,
-        figsize=(6.4, 4.8),
-        dpi=150,
-        col_wrap=1,
-        cmap="viridis",
-        snr_db_min=-10,
-        snr_db_max=40,
-        plot_outdir=f"{DRF_RECORDING_DIR}/spectrograms",
         **kwargs,
     ):
         """Operator that computes spectrograms from RF data.
@@ -140,8 +140,6 @@ class Spectrogram(holoscan.core.Operator):
             Number of samples in an RFArray chunk of data
         num_subchannels: int
             Number of subchannels contained in the RFArray data
-        data_outdir: os.PathLike
-            Directory for writing spectrogram data
         window: str
             Window function to apply before taking FFT
         nperseg: int
@@ -157,26 +155,9 @@ class Spectrogram(holoscan.core.Operator):
         num_spectra_per_chunk: int
             Number of spectra samples to calculate per chunk of data.
             Must evenly divide `chunk_size`.
-        num_chunks_per_output: int
-            Number of chunks to combine in a single output, either a data sample or plot
-        figsize: tuple[float, float]
-            Figure size in inches given as a tuple of (width, height)
-        dpi: int
-            Figure dots per inch
-        col_wrap: int
-            Number of columns of spectrograms to use in the figure, wrapping to new rows
-        cmap: str
-            Colormap
-        snr_db_min: float
-            Spectrogram color scale minimum, given as SNR in decibels
-        snr_db_max: float
-            Spectrogram color scale maximum, given as SNR in decibels
-        plot_outdir: os.PathLike
-            Directory for writing spectrogram plots
         """
         self.chunk_size = chunk_size
         self.num_subchannels = num_subchannels
-        self.data_outdir = pathlib.Path(data_outdir).resolve()
         self.window = window
         self.nperseg = nperseg
         if noverlap is None:
@@ -199,23 +180,264 @@ class Spectrogram(holoscan.core.Operator):
             )
             raise ValueError(msg)
         self.num_spectra_per_chunk = num_spectra_per_chunk
-        self.num_chunks_per_output = num_chunks_per_output
-        self.num_spectra_per_output = (
-            self.num_spectra_per_chunk * self.num_chunks_per_output
+        self.spec_sample_cadence = self.chunk_size // self.num_spectra_per_chunk
+
+        super().__init__(fragment, *args, **kwargs)
+        self.logger = logging.getLogger("holoscan.rf_array.Spectrogram")
+
+    def setup(self, spec: holoscan.core.OperatorSpec):
+        spec.input("rf_in")
+        spec.output("spec_out").connector(
+            holoscan.core.IOSpec.ConnectorType.DOUBLE_BUFFER,
+            capacity=self.num_spectra_per_chunk,
+            policy=0,  # pop
         )
+
+    def initialize(self):
+        self.logger.debug("Initializing spectrogram operator")
+
+        # warm up CUDA calculation and extract an FFT plan
+        for _host_spec in self.calc_spectrogram_chunk(
+            cp.ones((self.chunk_size, self.num_subchannels), dtype="complex64"),
+        ):
+            pass
+        plan_cache = cp.fft.config.get_plan_cache()
+        for key, node in plan_cache:
+            self.cufft_plan = node.plan
+
+    def compute(
+        self,
+        op_input: holoscan.core.InputContext,
+        op_output: holoscan.core.OutputContext,
+        context: holoscan.core.ExecutionContext,
+    ):
+        rf_arr = op_input.receive("rf_in")
+        stream_ptr = op_input.receive_cuda_stream("rf_in", allocate=True)
+
+        while rf_arr is not None:
+            rf_metadata = rf_arr.metadata
+
+            msg = f"Processing spectrogram for chunk with sample_idx {rf_metadata.sample_idx}"
+            self.logger.debug(msg)
+
+            with cp.cuda.ExternalStream(stream_ptr):
+                rf_data = cp.from_dlpack(rf_arr.data)
+                with self.cufft_plan:
+                    for spec_count, host_spec in enumerate(
+                        self.calc_spectrogram_chunk(rf_data)
+                    ):
+                        sample_idx = (
+                            rf_metadata.sample_idx
+                            + spec_count * self.spec_sample_cadence
+                        )
+                        spec_metadata = RFMetadata(
+                            sample_idx,
+                            rf_metadata.sample_rate_numerator,
+                            rf_metadata.sample_rate_denominator,
+                            rf_metadata.center_freq,
+                        )
+                        out_message = {
+                            # cast to Holoscan Tensor so it is passed without data copy
+                            # allowing emit before the stream is synced
+                            "spec": holoscan.as_tensor(host_spec),
+                            "metadata": spec_metadata,
+                        }
+                        op_output.emit(out_message, "spec_out")
+            # try to receive again to either get another message or exit the while loop
+            rf_arr = op_input.receive("rf_in")
+
+    def calc_spectrogram_chunk(self, rf_data):
+        # get pinned host memory for output so copy can run asynchronously
+        # (Fortran contiguous because we will want to output/plot separately by
+        #  subchannel and this keeps each subchannel contiguous)
+        spec_pinned = cupyx.empty_pinned(
+            (self.nfft, self.num_subchannels, self.num_spectra_per_chunk),
+            dtype="float32",
+            order="F",
+        )
+        spec_pinned[...] = np.nan
+
+        spectrum_chunks = rf_data.reshape(
+            (
+                self.num_spectra_per_chunk,
+                self.chunk_size // self.num_spectra_per_chunk,
+                self.num_subchannels,
+            )
+        )
+        _freqs, _sidxs, Zxx = cpss.stft(
+            spectrum_chunks,
+            fs=1,
+            window=self.window,
+            nperseg=self.nperseg,
+            noverlap=self.noverlap,
+            nfft=self.nfft,
+            detrend=self.detrend,
+            return_onesided=False,
+            boundary=None,
+            padded=True,
+            axis=1,
+            scaling="spectrum",
+        )
+        # reduce over time (last) axis
+        spec = cp.fft.fftshift(
+            self.reduce_op(Zxx.real**2 + Zxx.imag**2, axis=-1), axes=1
+        )
+
+        for spec_count in range(spec.shape[0]):
+            host_spec = spec[spec_count, ...].get(
+                out=spec_pinned[..., spec_count], blocking=False
+            )
+            yield host_spec
+
+
+@dataclasses.dataclass
+class SpectrogramOutputParams:
+    """Spectrogram output parameters"""
+
+    plot_outdir: os.PathLike = f"{DRF_RECORDING_DIR}/spectrograms"
+    """Directory for writing spectrogram plots"""
+    num_spectra_per_output: int = 1200
+    """Number of spectra to combine in a single output, either a data sample or plot"""
+    figsize: tuple[float, float] = (6.4, 4.8)
+    """Figure size in inches given as a tuple of (width, height)"""
+    dpi: int = 150
+    """Figure dots per inch"""
+    col_wrap: int = 1
+    """Number of columns of spectrograms to use in the figure, wrapping to new rows"""
+    cmap: str = "viridis"
+    """Colormap"""
+    snr_db_min: float = -10
+    """Spectrogram color scale minimum, given as SNR in decibels"""
+    snr_db_max: float = 40
+    """Spectrogram color scale maximum, given as SNR in decibels"""
+
+
+class SpectrogramOutput(holoscan.core.Operator):
+    nfft: int
+    spec_sample_cadence: int
+    num_subchannels: int
+    data_outdir: os.PathLike
+    plot_outdir: os.PathLike
+    num_spectra_per_output: int
+    figsize: tuple[float, float]
+    dpi: int
+    col_wrap: int
+    cmap: str
+    snr_db_min: float
+    snr_db_max: float
+
+    def __init__(
+        self,
+        fragment,
+        *args,
+        nfft,
+        spec_sample_cadence,
+        num_subchannels,
+        data_outdir,
+        plot_outdir=f"{DRF_RECORDING_DIR}/spectrograms",
+        num_spectra_per_output=1200,
+        figsize=(6.4, 4.8),
+        dpi=150,
+        col_wrap=1,
+        cmap="viridis",
+        snr_db_min=-10,
+        snr_db_max=40,
+        **kwargs,
+    ):
+        """Operator that computes spectrograms from RF data.
+
+        **==Named Inputs==**
+
+            spec_in : dict[spec: array, rf_metadata: RFMetadata]
+                Dictionary containing a spectrum and rf_metadata.
+
+        Parameters
+        ----------
+        fragment : Fragment
+            The fragment that the operator belongs to
+        nfft: int
+            Number of frequency samples in the spectrogram
+        spec_sample_cadence: int
+            Number of RF samples that go into each spectrum input chunk
+        num_subchannels: int
+            Number of subchannels contained in the spectrogram data
+        data_outdir: os.PathLike
+            Directory for writing spectrogram data
+        plot_outdir: os.PathLike
+            Directory for writing spectrogram plots
+        num_spectra_per_output: int
+            Number of spectra to combine in a single output, either a data sample or plot
+        figsize: tuple[float, float]
+            Figure size in inches given as a tuple of (width, height)
+        dpi: int
+            Figure dots per inch
+        col_wrap: int
+            Number of columns of spectrograms to use in the figure, wrapping to new rows
+        cmap: str
+            Colormap
+        snr_db_min: float
+            Spectrogram color scale minimum, given as SNR in decibels
+        snr_db_max: float
+            Spectrogram color scale maximum, given as SNR in decibels
+        """
+        self.nfft = nfft
+        self.spec_sample_cadence = spec_sample_cadence
+        self.num_subchannels = num_subchannels
+        self.data_outdir = pathlib.Path(data_outdir).resolve()
+        self.plot_outdir = pathlib.Path(plot_outdir).resolve()
+        self.num_spectra_per_output = num_spectra_per_output
         self.figsize = figsize
         self.dpi = dpi
         self.col_wrap = col_wrap
         self.cmap = cmap
         self.snr_db_min = snr_db_min
         self.snr_db_max = snr_db_max
-        self.plot_outdir = pathlib.Path(plot_outdir).resolve()
 
         super().__init__(fragment, *args, **kwargs)
-        self.logger = logging.getLogger("holoscan.sdr_mep_recorder.spectrogram")
+        self.logger = logging.getLogger("holoscan.rf_array.SpectrogramOutput")
 
     def setup(self, spec: holoscan.core.OperatorSpec):
-        spec.input("rf_in")
+        spec.input("spec_in").connector(
+            holoscan.core.IOSpec.ConnectorType.DOUBLE_BUFFER,
+            capacity=self.num_spectra_per_output,
+            policy=0,  # pop
+        )
+
+    def initialize(self):
+        self.logger.debug("Initializing spectrogram output operator")
+        self.data_outdir.mkdir(parents=True, exist_ok=True)
+        self.last_written_sample_idx = -1
+        self.latest_chunk_idx = 0
+        self.reset_stored_data()
+        self.create_spec_figure()
+        self.dmd_writer = None
+
+    def reset_stored_data(self, rf_metadata=None):
+        if rf_metadata is not None:
+            self.stored_metadata = rf_metadata
+            self.sample_rate_frac = fractions.Fraction(
+                self.stored_metadata.sample_rate_numerator,
+                self.stored_metadata.sample_rate_denominator,
+            )
+            self.spec_freq_idx = np.fft.fftshift(
+                np.fft.fftfreq(self.nfft, 1 / self.sample_rate_frac)
+            )
+            self.spec_sample_idx = (
+                rf_metadata.sample_idx
+                + self.spec_sample_cadence
+                * np.arange(self.num_spectra_per_output, dtype="uint64")
+            )
+        else:
+            self.stored_metadata = None
+            self.sample_rate_frac = None
+            self.spec_freq_idx = None
+            self.spec_sample_idx = None
+        self.spec_data = np.full(
+            (self.nfft, self.num_subchannels, self.num_spectra_per_output),
+            np.nan,
+            dtype=np.float32,
+            order="F",
+        )
 
     def create_spec_figure(self):
         ncols = min(self.col_wrap, self.num_subchannels)
@@ -242,7 +464,7 @@ class Spectrogram(holoscan.core.Operator):
             col_idx = sch % self.col_wrap
             ax = axs[row_idx, col_idx]
             img = ax.imshow(
-                self.spec_host_data[:, sch, :],
+                self.spec_data[:, sch, :],
                 cmap=self.cmap,
                 norm=self.norm,
                 aspect="auto",
@@ -280,96 +502,99 @@ class Spectrogram(holoscan.core.Operator):
         self.imgs = imgs
         self.ref_lvl_texts = ref_lvl_texts
 
-    def initialize(self):
-        self.logger.debug("Initializing spectrogram operator")
-        self.data_outdir.mkdir(parents=True, exist_ok=True)
-        self.spec_host_data = cupyx.zeros_pinned(
-            (self.nfft, self.num_subchannels, self.num_spectra_per_output),
-            dtype=np.float32,
-            order="F",
-        )
-        self.fill_data = np.full(
-            (self.nfft, self.num_subchannels, self.num_spectra_per_output),
-            np.nan,
-            dtype=np.float32,
-            order="F",
-        )
-        self.spec_host_data[...] = self.fill_data
-        self.last_written_sample_idx = -1
-        self.last_seen_sample_idx = -1
-        self.create_spec_figure()
-        self.prior_metadata = None
-        self.freq_idx = None
-        self.dmd_writer = None
-        self.chunk_rate_frac = None
+    def compute(
+        self,
+        op_input: holoscan.core.InputContext,
+        op_output: holoscan.core.OutputContext,
+        context: holoscan.core.ExecutionContext,
+    ):
+        spec_message = op_input.receive("spec_in")
+        # get stream and synchronize to ensure data is in host memory before proceeding
+        # (do this here because input buffer is large and therefore waiting on this
+        #  operator does not slow down upstream operators)
+        stream_ptr = op_input.receive_cuda_stream("spec_in", allocate=True)
+        stream = cp.cuda.ExternalStream(stream_ptr)
+        stream.synchronize()
+        while spec_message is not None:
+            self.compute_one(spec_message)
+            # try to receive again to either get another message or exit the while loop
+            spec_message = op_input.receive("spec_in")
 
-        # warm up CUDA calculation and extract an FFT plan
-        self.calc_spectrogram_chunk(
-            cp.ones((self.chunk_size, self.num_subchannels), dtype="complex64"),
-            0,
-        )
-        plan_cache = cp.fft.config.get_plan_cache()
-        for key, node in plan_cache:
-            self.cufft_plan = node.plan
+    def compute_one(self, spec_message):
+        spec_arr = np.from_dlpack(spec_message["spec"])
+        rf_metadata = spec_message["metadata"]
 
-    def set_metadata(self, rf_metadata):
-        self.prior_metadata = rf_metadata
-        self.freq_idx = np.fft.fftshift(
-            np.fft.fftfreq(
-                self.nfft,
-                rf_metadata.sample_rate_denominator / rf_metadata.sample_rate_numerator,
+        # reset stored data with new metadata if uninitialized
+        # (first time or finished previous write)
+        if self.stored_metadata is None:
+            self.reset_stored_data(rf_metadata)
+
+        # initialize Digital Metadata writer if uninitialized
+        if self.dmd_writer is None:
+            self.dmd_writer = drf.DigitalMetadataWriter(
+                metadata_dir=str(self.data_outdir),
+                subdir_cadence_secs=3600,
+                file_cadence_secs=1,
+                sample_rate_numerator=self.stored_metadata.sample_rate_numerator,
+                sample_rate_denominator=self.stored_metadata.sample_rate_denominator,
+                file_name="spectrogram",
             )
-        )
-        self.spectra_rate_frac = fractions.Fraction(
-            self.prior_metadata.sample_rate_numerator * self.num_spectra_per_chunk,
-            self.prior_metadata.sample_rate_denominator * self.chunk_size,
-        )
 
-    def get_chunk_idx(self, sample_idx):
-        # prior_metadata.sample_idx marks the start of an output cycle
-        return (
-            (sample_idx - self.prior_metadata.sample_idx) // self.chunk_size
-        ) % self.num_chunks_per_output
+        # if metadata changes or incoming data belongs to a newer batch,
+        # write out existing data and start anew
+        if (
+            (
+                self.stored_metadata.sample_rate_numerator
+                != rf_metadata.sample_rate_numerator
+            )
+            or (
+                self.stored_metadata.sample_rate_denominator
+                != rf_metadata.sample_rate_denominator
+            )
+            or (self.stored_metadata.center_freq != rf_metadata.center_freq)
+            or (
+                (rf_metadata.sample_idx - self.stored_metadata.sample_idx)
+                >= (self.num_spectra_per_output * self.spec_sample_cadence)
+            )
+        ):
+            self.write_output()
+            self.reset_stored_data(rf_metadata)
+
+        # chunk_idx is the index into the stored data arrays for the incoming data
+        # (stored_metadata.sample_idx marks the start of an output cycle)
+        chunk_idx = (
+            int(rf_metadata.sample_idx - self.stored_metadata.sample_idx)
+            // self.spec_sample_cadence
+        )
+        # store incoming data
+        self.latest_chunk_idx = chunk_idx
+        self.spec_data[..., chunk_idx] = spec_arr
+
+        # write output if we've filled the storage arrays
+        if chunk_idx == (self.num_spectra_per_output - 1):
+            self.write_output()
+            self.reset_stored_data()
 
     def write_output(self):
-        sample_idx = self.last_seen_sample_idx
+        chunk_idx = self.latest_chunk_idx
+        sample_idx = self.spec_sample_idx[chunk_idx]
         if sample_idx <= self.last_written_sample_idx:
             # skip writing because we already wrote this data
             return
-        if self.last_written_sample_idx != -1 and (
-            sample_idx - self.last_written_sample_idx
-        ) > (self.num_chunks_per_output * self.chunk_size):
-            # shouldn't be here, trying to write data that spans more than one output batch
-            msg = (
-                f"Call to write_output() with {sample_idx=} when "
-                f"last_written_sample_idx={self.last_written_sample_idx} is more than "
-                f"size of output batch ({self.num_chunks_per_output * self.chunk_size})"
-            )
-            self.logger.warning(msg)
-        chunk_idx = self.get_chunk_idx(sample_idx)
 
-        spec_sample_idx = sample_idx - chunk_idx * self.chunk_size
-        sr_frac = fractions.Fraction(
-            self.prior_metadata.sample_rate_numerator,
-            self.prior_metadata.sample_rate_denominator,
+        sample_idx_arr = self.spec_sample_idx[: (chunk_idx + 1)]
+        secs, picosecs = timestamp_floor(sample_idx_arr, self.sample_rate_frac)
+        microsecs = picosecs // 1_000_000
+        spec_start_dt = drf.util.epoch + datetime.timedelta(
+            seconds=int(secs[0]), microseconds=int(microsecs[0])
         )
-        spec_start_dt = drf.util.sample_to_datetime(
-            spec_sample_idx,
-            sr_frac,
+        time_idx = (
+            np.datetime64(spec_start_dt.replace(tzinfo=None))
+            + np.asarray(secs - secs[0], dtype="m8[s]")
+            + np.asarray(microsecs - microsecs[0], dtype="m8[us]")
         )
-        spectra_arange = np.arange(0, (chunk_idx + 1) * self.num_spectra_per_chunk)
-        sample_idx_arr = (
-            spec_sample_idx
-            + self.chunk_size // self.num_spectra_per_chunk * spectra_arange
-        )
-        time_idx = np.datetime64(spec_start_dt.replace(tzinfo=None)) + (
-            np.timedelta64(int(1000000000 / self.spectra_rate_frac), "ns")
-            * spectra_arange
-        )
-        output_spec_data = self.spec_host_data[
-            ...,
-            0 : (chunk_idx + 1) * self.num_spectra_per_chunk,
-        ]
+
+        output_spec_data = self.spec_data[..., : (chunk_idx + 1)]
 
         self.logger.info(f"Outputting spectrogram for time {spec_start_dt}")
 
@@ -377,13 +602,17 @@ class Spectrogram(holoscan.core.Operator):
         for retry in range(0, num_retries):
             try:
                 self.dmd_writer.write(
-                    [spec_sample_idx],
+                    [int(sample_idx_arr[0])],
                     [
                         {
                             "spectrogram": output_spec_data.transpose((1, 0, 2)),
-                            "freq_idx": self.freq_idx + self.prior_metadata.center_freq,
+                            "freq_idx": self.spec_freq_idx
+                            + self.stored_metadata.center_freq,
                             "sample_idx": sample_idx_arr,
-                            "center_freq": self.prior_metadata.center_freq,
+                            "time_idx": time_idx.astype(
+                                h5py.opaque_dtype(time_idx.dtype)
+                            ),
+                            "center_freq": self.stored_metadata.center_freq,
                         }
                     ],
                 )
@@ -394,7 +623,7 @@ class Spectrogram(holoscan.core.Operator):
                 break
 
         timestr = spec_start_dt.strftime("%Y-%m-%dT%H:%M:%S")
-        freqstr = f"{self.prior_metadata.center_freq / 1e6:n}MHz"
+        freqstr = f"{self.stored_metadata.center_freq / 1e6:n}MHz"
         datestr = spec_start_dt.strftime("%Y-%m-%d")
 
         reference_pwr = np.nanpercentile(
@@ -402,12 +631,14 @@ class Spectrogram(holoscan.core.Operator):
         )
         spec_power_db = 10 * np.log10(output_spec_data / reference_pwr)
         delta_t = time_idx[1] - time_idx[0]
-        delta_f = self.freq_idx[1] - self.freq_idx[0]
+        delta_f = self.spec_freq_idx[1] - self.spec_freq_idx[0]
         extent = (
             time_idx[0],
             time_idx[-1] + delta_t,
-            (self.prior_metadata.center_freq + self.freq_idx[0] - delta_f / 2) / 1e6,
-            (self.prior_metadata.center_freq + self.freq_idx[-1] + delta_f / 2) / 1e6,
+            (self.stored_metadata.center_freq + self.spec_freq_idx[0] - delta_f / 2)
+            / 1e6,
+            (self.stored_metadata.center_freq + self.spec_freq_idx[-1] + delta_f / 2)
+            / 1e6,
         )
         for sch in range(self.num_subchannels):
             self.imgs[sch].set(
@@ -430,109 +661,13 @@ class Spectrogram(holoscan.core.Operator):
         latest_spec_path.unlink(missing_ok=True)
         os.link(outpath, latest_spec_path)
 
-        # reset spectrogram data for next plot
-        self.spec_host_data[...] = self.fill_data
+        # track that we just wrote a sample
         self.last_written_sample_idx = sample_idx
-
-    def compute(
-        self,
-        op_input: holoscan.core.InputContext,
-        op_output: holoscan.core.OutputContext,
-        context: holoscan.core.ExecutionContext,
-    ):
-        rf_arr = op_input.receive("rf_in")
-        stream_ptr = op_input.receive_cuda_stream("rf_in", allocate=True)
-        rf_metadata = rf_arr.metadata
-
-        if (rf_metadata.sample_idx - self.last_seen_sample_idx) > (
-            self.num_chunks_per_output * self.chunk_size
-        ):
-            # triggers on first compute call, but write_output returns immediately
-            # new data is not in same output batch as unwritten, so write that first
-            self.write_output()
-
-        if self.prior_metadata is None:
-            self.set_metadata(rf_metadata)
-            self.dmd_writer = drf.DigitalMetadataWriter(
-                metadata_dir=str(self.data_outdir),
-                subdir_cadence_secs=3600,
-                file_cadence_secs=1,
-                sample_rate_numerator=self.prior_metadata.sample_rate_numerator,
-                sample_rate_denominator=self.prior_metadata.sample_rate_denominator,
-                file_name="spectrogram",
-            )
-        if (
-            (
-                self.prior_metadata.sample_rate_numerator
-                != rf_metadata.sample_rate_numerator
-            )
-            or (
-                self.prior_metadata.sample_rate_denominator
-                != rf_metadata.sample_rate_denominator
-            )
-            or (self.prior_metadata.center_freq != rf_metadata.center_freq)
-        ):
-            # metadata changed, write out existing data and start anew
-            self.write_output()
-            self.set_metadata(rf_metadata)
-
-        self.last_seen_sample_idx = rf_metadata.sample_idx
-        chunk_idx = self.get_chunk_idx(self.last_seen_sample_idx)
-
-        msg = (
-            f"Processing spectrogram for chunk with sample_idx {rf_metadata.sample_idx}"
-            f" into chunk_idx={chunk_idx}"
-        )
-        self.logger.debug(msg)
-
-        with cp.cuda.ExternalStream(stream_ptr) as stream:
-            rf_data = cp.from_dlpack(rf_arr.data)
-            with self.cufft_plan:
-                self.calc_spectrogram_chunk(rf_data, chunk_idx)
-            stream.synchronize()
-        # chunk_spec = self.spec_host_data[
-        # ...,
-        # chunk_idx * self.num_spectra_per_chunk : (chunk_idx + 1)
-        # * self.num_spectra_per_chunk,
-        # ]
-        if chunk_idx == (self.num_chunks_per_output - 1):
-            self.write_output()
-
-    def calc_spectrogram_chunk(self, rf_data, chunk_idx):
-        for chunk_spectrum_idx, spectrum_chunk in enumerate(
-            cp.split(rf_data, self.num_spectra_per_chunk, axis=0)
-        ):
-            _freqs, sidxs, Zxx = cpss.stft(
-                spectrum_chunk,
-                fs=1,
-                window=self.window,
-                nperseg=self.nperseg,
-                noverlap=self.noverlap,
-                nfft=self.nfft,
-                detrend=self.detrend,
-                return_onesided=False,
-                boundary=None,
-                padded=True,
-                axis=0,
-                scaling="spectrum",
-            )
-            # reduce over time axis
-            spec = cp.fft.fftshift(
-                self.reduce_op(Zxx.real**2 + Zxx.imag**2, axis=-1), axes=0
-            )
-
-            cp.asnumpy(
-                spec,
-                out=self.spec_host_data[
-                    ..., chunk_idx * self.num_spectra_per_chunk + chunk_spectrum_idx
-                ],
-                blocking=False,
-            )
 
     def stop(self):
         msg = (
             "Stopping spectrogram operator with "
-            f"last_seen_sample_idx={self.last_seen_sample_idx}."
+            f"last seen sample_idx={self.spec_sample_idx[self.latest_chunk_idx]}."
         )
         self.logger.info(msg)
         self.write_output()
