@@ -49,6 +49,7 @@ ENV HOLOSCAN_LOG_FORMAT=DEFAULT
 #
 COPY --chmod=775 recorder_service.py /app/recorder_service.py
 COPY --chmod=777 sdr_mep_recorder.py /app/sdr_mep_recorder.py
+COPY --chmod=775 spectrogram.py /app/spectrogram.py
 
 ENV HOME=/ramdisk
 WORKDIR /ramdisk
