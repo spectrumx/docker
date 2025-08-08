@@ -576,6 +576,8 @@ class SpectrogramOutput(holoscan.core.Operator):
             self.reset_stored_data()
 
     def write_output(self):
+        if self.stored_metadata is None:
+            return
         chunk_idx = self.latest_chunk_idx
         sample_idx = self.spec_sample_idx[chunk_idx]
         if sample_idx <= self.last_written_sample_idx:
@@ -665,9 +667,4 @@ class SpectrogramOutput(holoscan.core.Operator):
         self.last_written_sample_idx = sample_idx
 
     def stop(self):
-        msg = (
-            "Stopping spectrogram operator with "
-            f"last seen sample_idx={self.spec_sample_idx[self.latest_chunk_idx]}."
-        )
-        self.logger.info(msg)
         self.write_output()
