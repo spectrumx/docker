@@ -109,6 +109,8 @@ class PipelineParams:
     "Enable / disable complex float to int converter"
     digital_rf: bool = True
     "Enable / disable writing output to Digital RF"
+    metadata: bool = True
+    "Enable / disable writing inherent and user-supplied Digital RF metadata"
     spectrogram: bool = True
     "Enable / disable spectrogram processing and output"
 
@@ -404,23 +406,24 @@ class App(holoscan.core.Application):
                 )
                 self.add_flow(last_op, drf_sink)
 
-            dmd_sink = DigitalMetadataSink(
-                self,
-                name="dmd_sink",
-                metadata_dir=f"{self.kwargs('drf_sink')['channel_dir']}/metadata",
-                subdir_cadence_secs=self.kwargs("drf_sink")["subdir_cadence_secs"],
-                file_cadence_secs=self.kwargs("drf_sink")["file_cadence_millisecs"]
-                // 1000,
-                uuid=self.kwargs("drf_sink")["uuid"],
-                filename_prefix="metadata",
-                metadata=self.kwargs("metadata"),
-            )
-            dmd_sink.spec.inputs["rf_in"].connector(
-                holoscan.core.IOSpec.ConnectorType.DOUBLE_BUFFER,
-                capacity=25,
-                policy=0,  # pop
-            )
-            self.add_flow(last_op, dmd_sink)
+            if self.kwargs("pipeline")["metadata"]:
+                dmd_sink = DigitalMetadataSink(
+                    self,
+                    name="dmd_sink",
+                    metadata_dir=f"{self.kwargs('drf_sink')['channel_dir']}/metadata",
+                    subdir_cadence_secs=self.kwargs("drf_sink")["subdir_cadence_secs"],
+                    file_cadence_secs=self.kwargs("drf_sink")["file_cadence_millisecs"]
+                    // 1000,
+                    uuid=self.kwargs("drf_sink")["uuid"],
+                    filename_prefix="metadata",
+                    metadata=self.kwargs("metadata"),
+                )
+                dmd_sink.spec.inputs["rf_in"].connector(
+                    holoscan.core.IOSpec.ConnectorType.DOUBLE_BUFFER,
+                    capacity=25,
+                    policy=0,  # pop
+                )
+                self.add_flow(last_op, dmd_sink)
 
 
 def main():
