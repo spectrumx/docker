@@ -274,7 +274,7 @@ class Spectrogram(holoscan.core.Operator):
             detrend=self.detrend,
             return_onesided=False,
             boundary=None,
-            padded=True,
+            padded=False,
             axis=1,
             scaling="spectrum",
         )
