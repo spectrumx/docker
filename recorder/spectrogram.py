@@ -33,6 +33,7 @@ import holoscan
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
+from holohub import rf_array
 
 mpl.use("agg")
 
@@ -60,14 +61,6 @@ def timestamp_floor(nsamples, sample_rate_frac):
     picosecond = (tmp * tmp_div) + ((tmp * tmp_mod) // srn)
 
     return second, picosecond
-
-
-@dataclasses.dataclass
-class RFMetadata:
-    sample_idx: int
-    sample_rate_numerator: int
-    sample_rate_denominator: int
-    center_freq: int
 
 
 @dataclasses.dataclass
@@ -230,7 +223,7 @@ class Spectrogram(holoscan.core.Operator):
                             rf_metadata.sample_idx
                             + spec_count * self.spec_sample_cadence
                         )
-                        spec_metadata = RFMetadata(
+                        spec_metadata = rf_array.RFMetadata(
                             sample_idx,
                             rf_metadata.sample_rate_numerator,
                             rf_metadata.sample_rate_denominator,
