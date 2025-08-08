@@ -460,10 +460,17 @@ def main():
         app.run()
     except KeyboardInterrupt:
         # catch keyboard interrupt and simply exit
-        pass
-    finally:
         logger.info("Done")
         sys.stdout.flush()
+        # Holoscan graph execution framework handles all cleanup
+        # so we just need to exit immediately without further Python cleanup
+        # (which would result in a segfault from double free)
+        os._exit(0)
+    except SystemExit as e:
+        # Holoscan graph execution framework handles all cleanup
+        # so we just need to exit immediately without further Python cleanup
+        # (which would result in a segfault from double free)
+        os._exit(e.code)
 
 
 if __name__ == "__main__":
