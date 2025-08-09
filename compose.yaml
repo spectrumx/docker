@@ -92,7 +92,7 @@ services:
       - dev
 
   recorder:
-    image: ghcr.io/ryanvolz/mep-docker/recorder:v1
+    image: ghcr.io/ryanvolz/mep-docker/recorder:v1.2
     build: ./recorder
     container_name: recorder
     environment:
