@@ -649,7 +649,7 @@ class SpectrogramOutput(holoscan.core.Operator):
         self.fig.canvas.draw()
 
         fname = f"spec_{timestr}_{freqstr}.png"
-        outpath = self.plot_outdir / freqstr / datestr / fname
+        outpath = self.plot_outdir / datestr / fname
         outpath.parent.mkdir(parents=True, exist_ok=True)
         self.fig.savefig(outpath)
         latest_spec_path = outpath.parent.parent / "spec_latest.png"
