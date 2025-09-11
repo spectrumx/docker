@@ -15,9 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import base64
 import dataclasses
 import datetime
 import fractions
+import json
 import logging
 import os
 import pathlib
@@ -34,6 +36,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 from holohub import rf_array
+import paho.mqtt.client as mqtt
 
 mpl.use("agg")
 
@@ -389,6 +392,16 @@ class SpectrogramOutput(holoscan.core.Operator):
         super().__init__(fragment, *args, **kwargs)
         self.logger = logging.getLogger("holoscan.rf_array.SpectrogramOutput")
 
+        
+        service_name = "recorder_spectrogram"
+        self.mqtt_client = mqtt.Client(client_id=service_name)
+        #mqtt_client.on_message = on_message
+        self.mqtt_client.will_set(service_name + "/status", payload='{"state": "offline"}', qos=0, retain=True)
+        self.mqtt_client.connect('localhost', 1883, 60)
+        self.mqtt_client.subscribe(service_name + "/command")
+        self.mqtt_client.loop_start()
+        
+
     def setup(self, spec: holoscan.core.OperatorSpec):
         spec.input("spec_in").connector(
             holoscan.core.IOSpec.ConnectorType.DOUBLE_BUFFER,
@@ -647,6 +660,43 @@ class SpectrogramOutput(holoscan.core.Operator):
             f"{self.data_outdir.parent.name}/{self.data_outdir.name} @ {freqstr}"
         )
         self.fig.canvas.draw()
+
+        fft_result_b64 = base64.b64encode(
+                np.abs(np.fft.fft(output_spec_data.transpose(1,0,2))).astype(np.float32).tobytes()
+            ).decode("utf-8")  # Encode to base64 string
+
+        # Remove mac_address since we don't have full node population and it's breaking the website
+        # "mac_address": "f4e11ea46780",
+        payload = {
+            "data": fft_result_b64,
+            "type": "float32",
+            "short_name": "MEP",
+            "software_version": "v0.10b30",
+            "latitude": 41.699584,
+            "longitude": -86.237237,
+            "altitude": 2,
+            "batch": 0,
+            "sample_rate": sample_idx_arr[0],
+            "center_frequency": f"{self.stored_metadata.center_freq / 1e6:n}MHz",
+            "timestamp": datetime.datetime.now()
+            .strftime("%Y-%m-%dT%H:%M:%S.%f")
+            .replace(" ", "T")
+            + "+00:00",
+            "gain": 1,
+            "metadata": {
+                "data_type": "periodogram",
+                "fmin": min(self.spec_freq_idx),
+                "fmax": max(self.spec_freq_idx),
+                "nfft": 1024,
+                "xcount": 1024,
+                "gps_lock": False,
+                "scan_time": 0.07766938209533691,
+            },
+            "hardware_version": "3.4",
+            "hardware_board_id": "025",
+        }
+
+        self.mqtt_client.publish("radiohound/clients/data/test", payload=json.dumps(payload))
 
         fname = f"spec_{timestr}_{freqstr}.png"
         outpath = self.plot_outdir / datestr / fname
