@@ -53,10 +53,9 @@ services:
     entrypoint: >
       sh -c "while true; do
                nc -zvw3 radiohound.ee.nd.edu 1883 ||
-               echo 'Starting tunnel' \
+               echo 'Attempting to create ssh tunnel' \
                ssh -i /root/.ssh/id_rsa -o GlobalKnownHostsFile=/dev/null -o StrictHostKeyChecking=no  -N -L 127.0.0.1:8083:radiohound.ee.nd.edu:1883 git@radiohound.ee.nd.edu;
-               echo 'Tunnel failed, starting again' \
-               sleep 10;
+               sleep 30;
              done"
     profiles:
       - dev
