@@ -43,7 +43,7 @@ services:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
 
   mqtt-ssh-tunnel:
-    image: alpine:latest
+    image: randyherban/base-image:latest
     container_name: mqtt_ssh_tunnel
     ports:
       - "8083:8083"
@@ -51,8 +51,7 @@ services:
     volumes:
       - /opt/radiohound/.ssh/id_rsa:/root/.ssh/id_rsa:ro
     entrypoint: >
-      sh -c "apk add --no-cache openssh &&
-             while true; do
+      sh -c "while true; do
                nc -zvw3 radiohound.ee.nd.edu 1883 ||
                echo 'Starting tunnel' \
                ssh -i /root/.ssh/id_rsa -o GlobalKnownHostsFile=/dev/null -o StrictHostKeyChecking=no  -N -L 127.0.0.1:8083:radiohound.ee.nd.edu:1883 git@radiohound.ee.nd.edu;
