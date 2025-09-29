@@ -9,8 +9,6 @@ services:
     network_mode: "host"
     container_name: "icarus"
     restart: unless-stopped
-    profiles:
-      - dev
 
   radiohound_web:
     image: randyherban/radiohound_web:latest
@@ -19,8 +17,6 @@ services:
     network_mode: "host"
     container_name: "radiohound_web"
     restart: unless-stopped
-    profiles:
-      - dev
 
   radiohound_app:
     image: randyherban/radiohound_app:latest
@@ -29,8 +25,6 @@ services:
     network_mode: "host"
     container_name: "radiohound_app"
     restart: unless-stopped
-    profiles:
-      - dev
 
   mqtt:
     image: "eclipse-mosquitto"
@@ -57,8 +51,6 @@ services:
                ssh -i /root/.ssh/id_rsa -o GlobalKnownHostsFile=/dev/null -o StrictHostKeyChecking=no  -N -L 127.0.0.1:8083:radiohound.ee.nd.edu:1883 git@radiohound.ee.nd.edu;
                sleep 30;
              done"
-    profiles:
-      - dev
 
   mongodb:
     image: "mongodb/mongodb-community-server"
@@ -71,8 +63,6 @@ services:
     env_file: ".env"
     networks:
       - mongodb
-    profiles:
-      - dev
 
   fft:
     image: randyherban/fft:latest
@@ -86,8 +76,6 @@ services:
     network_mode: host
     volumes:
       - /data/ringbuffer:/data/ringbuffer
-    profiles:
-      - dev
 
   recorder:
     image: ghcr.io/ryanvolz/mep-docker/recorder:v1.2
