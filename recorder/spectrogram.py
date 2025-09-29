@@ -21,6 +21,7 @@ import fractions
 import logging
 import os
 import pathlib
+import subprocess
 import traceback
 import typing
 
@@ -174,6 +175,7 @@ class Spectrogram(holoscan.core.Operator):
             raise ValueError(msg)
         self.num_spectra_per_chunk = num_spectra_per_chunk
         self.spec_sample_cadence = self.chunk_size // self.num_spectra_per_chunk
+
 
         super().__init__(fragment, *args, **kwargs)
         self.logger = logging.getLogger("holoscan.rf_array.Spectrogram")
@@ -388,6 +390,16 @@ class SpectrogramOutput(holoscan.core.Operator):
 
         super().__init__(fragment, *args, **kwargs)
         self.logger = logging.getLogger("holoscan.rf_array.SpectrogramOutput")
+
+        
+        service_name = "recorder_spectrogram"
+        self.mqtt_client = mqtt.Client(client_id=service_name)
+        #mqtt_client.on_message = on_message
+        self.mqtt_client.will_set(service_name + "/status", payload='{"state": "offline"}', qos=0, retain=True)
+        self.mqtt_client.connect('localhost', 1883, 60)
+        self.mqtt_client.subscribe(service_name + "/command")
+        self.mqtt_client.loop_start()
+        
 
     def setup(self, spec: holoscan.core.OperatorSpec):
         spec.input("spec_in").connector(
@@ -648,6 +660,7 @@ class SpectrogramOutput(holoscan.core.Operator):
         )
         self.fig.canvas.draw()
 
+    
         fname = f"spec_{timestr}_{freqstr}.png"
         outpath = self.plot_outdir / datestr / fname
         outpath.parent.mkdir(parents=True, exist_ok=True)

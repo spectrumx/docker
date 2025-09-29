@@ -23,9 +23,16 @@ import signal
 import sys
 import tempfile
 import typing
+import subprocess
+import fractions
 
 import holoscan
 import jsonargparse
+import json
+import base64
+import cupy as cp
+import numpy as np
+import paho.mqtt.client as mqtt
 import matplotlib as mpl
 from holohub import basic_network, rf_array
 from holohub.rf_array.digital_metadata import DigitalMetadataSink
@@ -113,6 +120,8 @@ class PipelineParams:
     "Enable / disable writing inherent and user-supplied Digital RF metadata"
     spectrogram: bool = True
     "Enable / disable spectrogram processing and output"
+    fft: bool = True
+    "Enable / disable FFT processing and mqtt output"
 
 
 @dataclasses.dataclass
@@ -199,6 +208,153 @@ def build_config_parser():
     parser.add_argument("--spectrogram_output", type=SpectrogramOutputParams)
 
     return parser
+
+class FFT(holoscan.core.Operator):
+    """Simple FFT operator that computes an FFT across time for each subchannel
+
+    Inputs:
+        rf_in: RFArray-like tensor (chunk_size x num_subchannels)
+    Outputs:
+        fft_out: dict with 'fft' (host array) and 'metadata' (RFMetadata)
+    """
+
+    def __init__(self, fragment, *args, chunk_size, num_subchannels, nfft=4096, **kwargs):
+        self.chunk_size = chunk_size
+        self.num_subchannels = num_subchannels
+        # fixed FFT size (defaults to 4096 bins)
+        self.nfft = nfft
+        super().__init__(fragment, *args, **kwargs)
+        self.logger = logging.getLogger("holoscan.rf_array.FFT")
+
+    def setup(self, spec: holoscan.core.OperatorSpec):
+        spec.input("rf_in")
+        spec.output("fft_out").connector(
+            holoscan.core.IOSpec.ConnectorType.DOUBLE_BUFFER,
+            capacity=1,
+            policy=0,  # pop
+        )
+
+    def initialize(self):
+        # warm up
+        _ = cp.fft.fft(cp.ones((self.nfft, self.num_subchannels), dtype="complex64"))
+
+    def compute(self, op_input, op_output, context):
+        rf_arr = op_input.receive("rf_in")
+        stream_ptr = op_input.receive_cuda_stream("rf_in", allocate=True)
+        while rf_arr is not None:
+            rf_metadata = rf_arr.metadata
+            with cp.cuda.ExternalStream(stream_ptr):
+                rf_data = cp.from_dlpack(rf_arr.data)
+                # compute FFT along time axis (axis 0) with fixed nfft
+                fft_gpu = cp.fft.fftshift(cp.fft.fft(rf_data, n=self.nfft, axis=0), axes=0)
+                # move to host pinned memory
+                fft_host = cp.asnumpy(fft_gpu)
+                out_message = {"fft": holoscan.as_tensor(fft_host), "metadata": rf_metadata}
+                op_output.emit(out_message, "fft_out")
+
+            rf_arr = op_input.receive("rf_in")
+
+
+@dataclasses.dataclass
+class FFTOutputParams:
+    mqtt_host: str = "localhost"
+    mqtt_port: int = 1883
+
+
+class FFTOutput(holoscan.core.Operator):
+    def __init__(self, fragment, *args, nfft, num_subchannels, mqtt_host="localhost", mqtt_port=1883, **kwargs):
+        self.nfft = nfft
+        self.num_subchannels = num_subchannels
+        self.mqtt_host = mqtt_host
+        self.mqtt_port = mqtt_port
+        super().__init__(fragment, *args, **kwargs)
+        self.logger = logging.getLogger("holoscan.rf_array.FFTOutput")
+        service_name = "recorder_fft"
+        self.mqtt_client = mqtt.Client(client_id=service_name)
+        self.mqtt_client.will_set(service_name + "/status", payload='{"state": "offline"}', qos=0, retain=True)
+        try:
+            self.mqtt_client.connect(self.mqtt_host, self.mqtt_port, 60)
+            self.mqtt_client.loop_start()
+        except Exception:
+            self.logger.exception("Failed to connect to MQTT broker")
+
+        # try to discover MAC address (same approach as SpectrogramOutput)
+        self.mac_address = None
+        try:
+            result = subprocess.run(["ifconfig", "en0"], capture_output=True, text=True)
+            for line in result.stdout.splitlines():
+                if "ether" in line:
+                    self.mac_address = line.split()[1].replace(':','')
+                    break
+        except Exception:
+            # if this fails, leave mac_address as None
+            self.logger.debug("Could not determine MAC address for FFTOutput")
+
+        # placeholders for metadata populated on first message
+        self.stored_metadata = None
+        self.sample_rate_frac = None
+        self.spec_freq_idx = None
+
+    def setup(self, spec: holoscan.core.OperatorSpec):
+        spec.input("fft_in").connector(
+            holoscan.core.IOSpec.ConnectorType.DOUBLE_BUFFER,
+            capacity=4,
+            policy=0,
+        )
+
+    def compute(self, op_input, op_output, context):
+        fft_msg = op_input.receive("fft_in")
+        # synchronize stream to ensure host memory valid
+        stream_ptr = op_input.receive_cuda_stream("fft_in", allocate=True)
+        stream = cp.cuda.ExternalStream(stream_ptr)
+        stream.synchronize()
+        while fft_msg is not None:
+            fft_arr = np.from_dlpack(fft_msg["fft"])
+            rf_metadata = fft_msg["metadata"]
+            # initialize metadata-derived fields on first message
+            if self.stored_metadata is None:
+                self.stored_metadata = rf_metadata
+                self.sample_rate_frac = fractions.Fraction(
+                    self.stored_metadata.sample_rate_numerator,
+                    self.stored_metadata.sample_rate_denominator,
+                )
+                # frequency indices for FFT bins (MHz offset will be added when publishing)
+                self.spec_freq_idx = np.fft.fftshift(
+                    np.fft.fftfreq(self.nfft, 1 / self.sample_rate_frac)
+                )
+            # take magnitude
+            mag = np.abs(fft_arr).astype(np.float32)
+            # build payload with expanded metadata (mirrors SpectrogramOutput fields)
+            payload = {
+                "data": base64.b64encode(mag[:, 0].copy(order="C")).decode("utf-8"),
+                "mac_address": self.mac_address,
+                "type": "float32",
+                "short_name": "MEP",
+                "software_version": "v0.10b30",
+                "latitude": 41.699584,
+                "longitude": -86.237237,
+                "altitude": 2,
+                "batch": 0,
+                "sample_rate": float(self.sample_rate_frac),
+                "center_frequency": float(self.stored_metadata.center_freq),
+                "timestamp": None,
+                "gain": 1,
+                "metadata": {
+                    "data_type": "periodogram",
+                    "fmin": int(min(self.spec_freq_idx)),
+                    "fmax": int(max(self.spec_freq_idx)),
+                    "nfft": self.nfft,
+                    "xcount": self.nfft,
+                    "gps_lock": False,
+                    "scan_time": 0.0,
+                },
+            }
+            try:
+                self.mqtt_client.publish("radiohound/clients/data/fft", payload=json.dumps(payload))
+            except Exception:
+                self.logger.exception("Failed to publish FFT payload")
+
+            fft_msg = op_input.receive("fft_in")
 
 
 class App(holoscan.core.Application):
@@ -365,6 +521,7 @@ class App(holoscan.core.Application):
                     **self.kwargs("spectrogram_output"),
                 )
                 self.add_flow(spectrogram, spectrogram_output)
+                # (FFT wiring moved below so it can be enabled independently)
 
             if self.kwargs("pipeline")["int_converter"]:
                 int_converter = rf_array.TypeConversionComplexFloatToInt(
@@ -374,6 +531,27 @@ class App(holoscan.core.Application):
                 )
                 self.add_flow(last_op, int_converter)
                 last_op = int_converter
+
+            # independent FFT wiring: place after current last_op so it can consume
+            # the converted/resampled data if requested
+            if self.kwargs("pipeline")["fft"]:
+                fft_op = FFT(
+                    self,
+                    cuda_stream_pool,
+                    name="fft",
+                    chunk_size=last_chunk_shape[0],
+                    num_subchannels=last_chunk_shape[1],
+                )
+                fft_output = FFTOutput(
+                    self,
+                    name="fft_output",
+                    nfft=last_chunk_shape[0],
+                    num_subchannels=last_chunk_shape[1],
+                    mqtt_host="localhost",
+                    mqtt_port=1883,
+                )
+                self.add_flow(last_op, fft_op)
+                self.add_flow(fft_op, fft_output)
 
         if self.kwargs("pipeline")["digital_rf"]:
             if (
