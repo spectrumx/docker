@@ -33,7 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #
 # Install Python dependencies not covered by deb packages
 #
-RUN python3 -m pip install --no-cache-dir aiomqtt anyio digital-rf jsonargparse[ruyaml,signatures] matplotlib exceptiongroup
+RUN python3 -m pip install --no-cache-dir aiomqtt anyio digital-rf jsonargparse[ruyaml,signatures] matplotlib exceptiongroup paho-mqtt ruyaml
 
 #
 # Set up environment variables

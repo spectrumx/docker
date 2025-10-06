@@ -390,15 +390,6 @@ class SpectrogramOutput(holoscan.core.Operator):
 
         super().__init__(fragment, *args, **kwargs)
         self.logger = logging.getLogger("holoscan.rf_array.SpectrogramOutput")
-
-        
-        service_name = "recorder_spectrogram"
-        self.mqtt_client = mqtt.Client(client_id=service_name)
-        #mqtt_client.on_message = on_message
-        self.mqtt_client.will_set(service_name + "/status", payload='{"state": "offline"}', qos=0, retain=True)
-        self.mqtt_client.connect('localhost', 1883, 60)
-        self.mqtt_client.subscribe(service_name + "/command")
-        self.mqtt_client.loop_start()
         
 
     def setup(self, spec: holoscan.core.OperatorSpec):

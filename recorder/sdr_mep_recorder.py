@@ -350,7 +350,7 @@ class FFTOutput(holoscan.core.Operator):
                 },
             }
             try:
-                self.mqtt_client.publish("radiohound/clients/data/fft", payload=json.dumps(payload))
+                self.mqtt_client.publish("radiohound/clients/data/"+self.mac_address, payload=json.dumps(payload))
             except Exception:
                 self.logger.exception("Failed to publish FFT payload")
 
