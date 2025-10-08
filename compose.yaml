@@ -5,7 +5,8 @@ services:
     env_file: ".env"
     volumes:
       #- ./icarus/system.json:/opt/radiohound/icarus/system.json
-      - /data/ringbuffer:/data/ringbuffer
+      - /data:/data
+      - /opt/mep-examples:/opt/mep-examples
     network_mode: "host"
     container_name: "icarus"
     restart: unless-stopped
