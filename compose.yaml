@@ -45,7 +45,7 @@ services:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
 
   mongodb:
-    image: "mongodb/mongodb-community-server"
+    image: "mongodb/mongodb-community-server:8.2.1-ubuntu2204"
     container_name: "mongodb"
     restart: unless-stopped
     ports:
