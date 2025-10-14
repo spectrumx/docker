@@ -43,25 +43,6 @@ services:
       - ./mosquitto:/etc/mosquitto
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
 
-  mqtt-ssh-tunnel:
-    image: randyherban/base-image:latest
-    container_name: mqtt_ssh_tunnel
-    ports:
-      - "8083:8083"
-    restart: unless-stopped
-    volumes:
-      - /opt/radiohound/.ssh/id_rsa:/root/.ssh/id_rsa:ro
-    entrypoint: >
-      sh -c "while true; do
-               nc -zvw3 radiohound.ee.nd.edu 1883 ||
-               echo 'Starting tunnel' \
-               ssh -i /root/.ssh/id_rsa -o GlobalKnownHostsFile=/dev/null -o StrictHostKeyChecking=no  -N -L 127.0.0.1:8083:radiohound.ee.nd.edu:1883 git@radiohound.ee.nd.edu;
-               echo 'Tunnel failed, starting again' \
-               sleep 10;
-             done"
-    profiles:
-      - dev
-
   mongodb:
     image: "mongodb/mongodb-community-server"
     container_name: "mongodb"
@@ -73,21 +54,6 @@ services:
     env_file: ".env"
     networks:
       - mongodb
-    profiles:
-      - dev
-
-  fft:
-    image: randyherban/fft:latest
-    platform: linux/arm64/v8
-    env_file: ".env"
-    environment:
-      - DRF_RECORDING_DIR=/data/ringbuffer
-      - DRF_FFT_CHANNEL=sr1MHz
-    container_name: fft
-    restart: unless-stopped
-    network_mode: host
-    volumes:
-      - /data/ringbuffer:/data/ringbuffer
     profiles:
       - dev
 
