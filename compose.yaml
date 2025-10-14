@@ -7,6 +7,7 @@ services:
       #- ./icarus/system.json:/opt/radiohound/icarus/system.json
       - /data:/data
       - /opt/mep-examples:/opt/mep-examples
+      - /home/mep:/home/mep
     network_mode: "host"
     container_name: "icarus"
     restart: unless-stopped
