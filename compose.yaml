@@ -8,6 +8,7 @@ services:
       - /data:/data
       - /opt/mep-examples:/opt/mep-examples
       - /home/mep:/home/mep
+      - /opt/radiohound/.ssh:/opt/radiohound/.ssh
     network_mode: "host"
     container_name: "icarus"
     restart: unless-stopped
