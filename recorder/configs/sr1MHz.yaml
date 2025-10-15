@@ -27,7 +27,10 @@ pipeline:
   resampler2: true
   int_converter: false
   digital_rf: true
+  metadata: true
   spectrogram: true
+  spectrogram_mqtt: true
+  spectrogram_output: true
 
 packet:
   batch_size: &batch_size 625 # Number of packets to process at once into tensor data
@@ -103,14 +106,23 @@ spectrogram:
   reduce_op: max
   num_spectra_per_chunk: 1
 
+spectrogram_mqtt:
+  input_buffer_capacity: 10
+  service_name: recorder_fft
+  status_topic: "{service_name}/status"
+  data_topic: "radiohound/clients/data/{node_id}"
+  mqtt_host: "localhost"
+  mqtt_port: 1883
+  mqtt_keepalive: 60
+
 spectrogram_output:
   num_spectra_per_output: 600
   figsize:
-  - 6.4
-  - 4.8
+    - 6.4
+    - 4.8
   dpi: 200
   col_wrap: 1
   cmap: viridis
   snr_db_min: -5
   snr_db_max: 20
-  plot_outdir: /data/ringbuffer/spectrograms
+  plot_subdir: spectrograms

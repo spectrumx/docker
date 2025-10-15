@@ -60,17 +60,19 @@ services:
       - dev
 
   recorder:
-    image: ghcr.io/ryanvolz/mep-docker/recorder:v1.2
-    build: ./recorder
+    image: ghcr.io/ryanvolz/holoscan_recorder/mep:main
     container_name: recorder
     environment:
-      - DRF_RECORDING_DIR=/data/ringbuffer
-      - DRF_TMP_RINGBUFFER_DIR=/data/tmp-ringbuffer
       - HOLOSCAN_EXECUTOR_LOG_LEVEL=WARN
       - HOLOSCAN_LOG_LEVEL=INFO
       - HOLOSCAN_LOG_FORMAT=DEFAULT
+      - NODE_ID=${NODE_ID:?error}
       - PYTHONUNBUFFERED=1
-      - RECORDER_DEFAULT_CONFIG=sr1MHz
+      - RECORDER_CONFIG_PATH=/config
+      - RECORDER_OUTPUT_PATH=/data/ringbuffer
+      - RECORDER_RAM_RINGBUFFER_PATH=/ramdisk
+      - RECORDER_START_CONFIG=sr1MHz
+      - RECORDER_TMP_RINGBUFFER_PATH=/data/tmp-ringbuffer
     network_mode: host
     restart: unless-stopped
     runtime: nvidia
@@ -79,7 +81,7 @@ services:
     user: ${UID}:${GID}
     volumes:
       - /data:/data
-      - ./recorder:/app
+      - ./recorder/config:/config
 
 volumes:
     mongodb:
