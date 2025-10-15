@@ -81,7 +81,7 @@ services:
     user: ${UID}:${GID}
     volumes:
       - /data:/data
-      - ./recorder/config:/config
+      - ./recorder/configs:/config
 
 volumes:
     mongodb:
