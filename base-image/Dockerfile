@@ -4,6 +4,7 @@ RUN apt-get update && apt-get install -y \
     libhdf5-dev \
     libzmq3-dev \
     git \
+    vim \
     netcat-traditional \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*

@@ -12,8 +12,6 @@ services:
     network_mode: "host"
     container_name: "icarus"
     restart: unless-stopped
-    profiles:
-      - dev
 
   radiohound_web:
     image: randyherban/radiohound_web:latest
@@ -22,8 +20,6 @@ services:
     network_mode: "host"
     container_name: "radiohound_web"
     restart: unless-stopped
-    profiles:
-      - dev
 
   radiohound_app:
     image: randyherban/radiohound_app:latest
@@ -32,8 +28,6 @@ services:
     network_mode: "host"
     container_name: "radiohound_app"
     restart: unless-stopped
-    profiles:
-      - dev
 
   mqtt:
     image: "eclipse-mosquitto:2.0.22"
@@ -56,8 +50,6 @@ services:
     env_file: ".env"
     networks:
       - mongodb
-    profiles:
-      - dev
 
   recorder:
     image: ghcr.io/ryanvolz/holoscan_recorder/mep:main
