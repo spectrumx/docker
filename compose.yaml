@@ -36,7 +36,7 @@ services:
       - dev
 
   mqtt:
-    image: "eclipse-mosquitto"
+    image: "eclipse-mosquitto:2.0.22"
     container_name: "mqtt"
     restart: unless-stopped
     ports:
@@ -60,7 +60,7 @@ services:
       - dev
 
   recorder:
-    image: ghcr.io/ryanvolz/holoscan_recorder/mep:latest
+    image: ghcr.io/ryanvolz/holoscan_recorder/mep:main
     container_name: recorder
     environment:
       - HOLOSCAN_EXECUTOR_LOG_LEVEL=WARN
