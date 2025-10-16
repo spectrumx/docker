@@ -5,7 +5,10 @@ services:
     env_file: ".env"
     volumes:
       #- ./icarus/system.json:/opt/radiohound/icarus/system.json
-      - /data/ringbuffer:/data/ringbuffer
+      - /data:/data
+      - /opt/mep-examples:/opt/mep-examples
+      - /home/mep:/home/mep
+      - /opt/radiohound/.ssh:/opt/radiohound/.ssh
     network_mode: "host"
     container_name: "icarus"
     restart: unless-stopped
@@ -27,7 +30,7 @@ services:
     restart: unless-stopped
 
   mqtt:
-    image: "eclipse-mosquitto"
+    image: "eclipse-mosquitto:2.0.22"
     container_name: "mqtt"
     restart: unless-stopped
     ports:
@@ -36,24 +39,8 @@ services:
       - ./mosquitto:/etc/mosquitto
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
 
-  mqtt-ssh-tunnel:
-    image: randyherban/base-image:latest
-    container_name: mqtt_ssh_tunnel
-    ports:
-      - "8083:8083"
-    restart: unless-stopped
-    volumes:
-      - /opt/radiohound/.ssh/id_rsa:/root/.ssh/id_rsa:ro
-    entrypoint: >
-      sh -c "while true; do
-               nc -zvw3 radiohound.ee.nd.edu 1883 ||
-               echo 'Attempting to create ssh tunnel' \
-               ssh -i /root/.ssh/id_rsa -o GlobalKnownHostsFile=/dev/null -o StrictHostKeyChecking=no  -N -L 127.0.0.1:8083:radiohound.ee.nd.edu:1883 git@radiohound.ee.nd.edu;
-               sleep 30;
-             done"
-
   mongodb:
-    image: "mongodb/mongodb-community-server"
+    image: "mongodb/mongodb-community-server:8.2.1-ubuntu2204"
     container_name: "mongodb"
     restart: unless-stopped
     ports:
@@ -64,31 +51,20 @@ services:
     networks:
       - mongodb
 
-  fft:
-    image: randyherban/fft:latest
-    platform: linux/arm64/v8
-    env_file: ".env"
-    environment:
-      - DRF_RECORDING_DIR=/data/ringbuffer
-      - DRF_FFT_CHANNEL=sr1MHz
-    container_name: fft
-    restart: unless-stopped
-    network_mode: host
-    volumes:
-      - /data/ringbuffer:/data/ringbuffer
-
   recorder:
-    image: ghcr.io/ryanvolz/mep-docker/recorder:v1.2
-    build: ./recorder
+    image: ghcr.io/ryanvolz/holoscan_recorder/mep:main
     container_name: recorder
     environment:
-      - DRF_RECORDING_DIR=/data/ringbuffer
-      - DRF_TMP_RINGBUFFER_DIR=/data/tmp-ringbuffer
       - HOLOSCAN_EXECUTOR_LOG_LEVEL=WARN
       - HOLOSCAN_LOG_LEVEL=INFO
       - HOLOSCAN_LOG_FORMAT=DEFAULT
+      - NODE_ID=${NODE_ID:?error}
       - PYTHONUNBUFFERED=1
-      - RECORDER_DEFAULT_CONFIG=sr1MHz
+      - RECORDER_CONFIG_PATH=/config
+      - RECORDER_OUTPUT_PATH=/data/ringbuffer
+      - RECORDER_RAM_RINGBUFFER_PATH=/ramdisk
+      - RECORDER_START_CONFIG=sr1MHz
+      - RECORDER_TMP_RINGBUFFER_PATH=/data/tmp-ringbuffer
     network_mode: host
     restart: unless-stopped
     runtime: nvidia
@@ -97,7 +73,7 @@ services:
     user: ${UID}:${GID}
     volumes:
       - /data:/data
-      - ./recorder:/app
+      - ./recorder/configs:/config
 
 volumes:
     mongodb:
