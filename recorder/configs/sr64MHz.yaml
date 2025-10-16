@@ -20,15 +20,15 @@ scheduler:
 
 pipeline:
   selector: false
-  converter: false
+  converter: true
   rotator: false
   resampler0: false
   resampler1: false
   resampler2: false
-  int_converter: false
+  int_converter: true
   digital_rf: true
   metadata: true
-  spectrogram: false
+  spectrogram: true
   spectrogram_mqtt: true
   spectrogram_output: true
 

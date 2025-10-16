@@ -109,11 +109,11 @@ spectrogram_mqtt:
 spectrogram_output:
   num_spectra_per_output: 600
   figsize:
-  - 6.4
-  - 4.8
+    - 6.4
+    - 4.8
   dpi: 200
   col_wrap: 1
   cmap: viridis
   snr_db_min: -5
   snr_db_max: 20
-  plot_outdir: /data/ringbuffer/spectrograms
+  plot_subdir: spectrograms
