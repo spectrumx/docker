@@ -9,6 +9,8 @@ services:
       - /opt/mep-examples:/opt/mep-examples
       - /home/mep:/home/mep
       - /opt/radiohound/.ssh:/opt/radiohound/.ssh
+    ports:
+      - 8083:8083
     network_mode: "host"
     container_name: "icarus"
     restart: unless-stopped
