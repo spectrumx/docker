@@ -54,7 +54,7 @@ services:
       - mongodb
 
   recorder:
-    image: ghcr.io/ryanvolz/holoscan_recorder/mep:main
+    image: ghcr.io/ryanvolz/holoscan_recorder/mep:latest
     container_name: recorder
     environment:
       - HOLOSCAN_EXECUTOR_LOG_LEVEL=WARN
