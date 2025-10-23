@@ -33,11 +33,10 @@ services:
     image: "eclipse-mosquitto:2.0.22"
     container_name: "mqtt"
     restart: unless-stopped
-    ports:
-      - "1883:1883"
     volumes:
       - ./mosquitto:/etc/mosquitto
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+    network_mode: "host"
 
   mongodb:
     image: "mongodb/mongodb-community-server:8.2.1-ubuntu2204"
