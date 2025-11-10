@@ -9,6 +9,10 @@ services:
       - /opt/mep-examples:/opt/mep-examples
       - /home/mep:/home/mep
       - /opt/radiohound/.ssh:/opt/radiohound/.ssh
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/radiohound/docker:/opt/radiohound/docker
+    environment:
+      - DOCKER_COMPOSE_FILE=/opt/radiohound/docker/compose.yaml
     network_mode: "host"
     container_name: "icarus"
     restart: unless-stopped
