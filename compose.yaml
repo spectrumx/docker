@@ -64,7 +64,7 @@ services:
       - NODE_ID=${NODE_ID:?error}
       - PYTHONUNBUFFERED=1
       - RECORDER_CONFIG_PATH=/config
-      - RECORDER_OUTPUT_PATH=/data/ringbuffer
+      - RECORDER_OUTPUT_PATH=/data/captures
       - RECORDER_RAM_RINGBUFFER_PATH=/ramdisk
       - RECORDER_START_CONFIG=sr1MHz
       - RECORDER_TMP_RINGBUFFER_PATH=/data/tmp-ringbuffer
