@@ -91,9 +91,9 @@ services:
       - TUNER_CONTROL_SERVICE_LOG_LEVEL=INFO
     network_mode: host
     restart: unless-stopped
-    privileged: true
-    devices:
-      - /dev:/dev
+    privileged: true  # for device access without knowing whether tuners are present
+    volumes:
+      - /dev:/dev  # volume map /dev because we want udev symlinks
 
 volumes:
     mongodb:
