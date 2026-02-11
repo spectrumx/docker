@@ -91,12 +91,9 @@ services:
       - TUNER_CONTROL_SERVICE_LOG_LEVEL=INFO
     network_mode: host
     restart: unless-stopped
-    volumes:
-      # for the Valon tuner
-      - /dev/valon5015:/dev/valon5015
-      # both of these are for the LMX2820 tuner (either should work, both because we can)
-      - /dev/serial/by-id/usb-0403_6014-if00-port0:/dev/ftdi
-      - /dev/lmx2820:/dev/lmx2820
+    privileged: true
+    devices:
+      - /dev:/dev
 
 volumes:
     mongodb:
