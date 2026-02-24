@@ -79,7 +79,7 @@ services:
       - ./recorder/configs:/config
 
   tuner_control:
-    image: ghcr.io/spectrumx/mep-tuner-control:main
+    image: ghcr.io/spectrumx/mep-tuner-control:latest
     container_name: tuner_control
     environment:
       - MEP_TUNERS_LOG_LEVEL=DEBUG
