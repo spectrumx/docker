@@ -13,6 +13,8 @@ services:
       - /opt/radiohound/docker:/opt/radiohound/docker
     environment:
       - DOCKER_COMPOSE_FILE=/opt/radiohound/docker/compose.yaml
+      - MEP_UID=${UID}
+      - MEP_GID=${GID}
     network_mode: "host"
     container_name: "icarus"
     restart: unless-stopped
