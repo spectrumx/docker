@@ -48,13 +48,10 @@ services:
     image: "mongodb/mongodb-community-server:8.2.1-ubuntu2204"
     container_name: "mongodb"
     restart: unless-stopped
-    ports:
-      - 27017:27017
     volumes:
         - mongodb:/data/db
+    network_mode: "host"
     env_file: ".env"
-    networks:
-      - mongodb
 
   recorder:
     image: ghcr.io/ryanvolz/holoscan_recorder/mep:latest
@@ -99,6 +96,3 @@ services:
 
 volumes:
     mongodb:
-
-networks:
-  mongodb:
