@@ -33,8 +33,8 @@ pipeline:
   spectrogram_output: true
 
 packet:
-  batch_size: &batch_size 625 # Number of packets to process at once into tensor data
-  batch_capacity: 25 # Number of batches that can be queued and processed at once
+  batch_size: &batch_size 3125 # Number of packets to process at once into tensor data
+  batch_capacity: 10 # Number of batches that can be queued and processed at once
   max_packet_size: &max_packet_size 8256
   num_subchannels: &num_subchannels 1 # Number of IQ subchannels of data that form a sample
   num_samples: &rx_chunk_size 6400000 # Number of samples to output as a single chunk, must fit one batch of packets
