@@ -72,6 +72,9 @@ services:
     runtime: nvidia
     tmpfs:
       - /ramdisk:mode=777,uid=${UID},gid=${GID},nodev,nosuid,noexec,size=1G
+    ulimits:
+      # increase stack limit to prevent failed allocations
+      stack: 67108864
     user: ${UID}:${GID}
     volumes:
       - /data:/data
