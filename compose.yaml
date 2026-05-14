@@ -56,6 +56,10 @@ services:
   recorder:
     image: ghcr.io/ryanvolz/holoscan_recorder/mep:latest
     container_name: recorder
+    cap_add:
+      - SYS_NICE
+    ulimits:
+      rtprio: 99
     environment:
       - HOLOSCAN_EXECUTOR_LOG_LEVEL=WARN
       - HOLOSCAN_LOG_LEVEL=INFO
@@ -73,6 +77,8 @@ services:
     tmpfs:
       - /ramdisk:mode=777,uid=${UID},gid=${GID},nodev,nosuid,noexec,size=2G
     user: ${UID}:${GID}
+    group_add:
+      - 995  # debug
     volumes:
       - /data:/data
       - ./recorder/configs:/config
