@@ -4,8 +4,8 @@ services:
     platform: linux/arm64/v8
     env_file: ".env"
     volumes:
-      #- ./icarus/system.json:/opt/radiohound/icarus/system.json
       - /data:/data
+      - icarus:/.cache
       - /opt/mep-examples:/opt/mep-examples
       - /home/mep:/home/mep
       - /opt/radiohound/.ssh:/opt/radiohound/.ssh
