@@ -5,7 +5,7 @@ services:
     env_file: ".env"
     volumes:
       - /data:/data
-      - icarus:/.cache
+      - ./icarus:/opt/radiohound/icarus/.cache
       - /opt/mep-examples:/opt/mep-examples
       - /home/mep:/home/mep
       - /opt/radiohound/.ssh:/opt/radiohound/.ssh
