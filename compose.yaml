@@ -36,7 +36,7 @@ services:
     restart: unless-stopped
 
   mqtt:
-    image: "eclipse-mosquitto:2.0.22"
+    image: "eclipse-mosquitto:2.1.2-alpine"
     container_name: "mqtt"
     restart: unless-stopped
     volumes:
