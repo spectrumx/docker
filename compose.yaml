@@ -76,7 +76,7 @@ services:
     restart: unless-stopped
     runtime: nvidia
     tmpfs:
-      - /ramdisk:mode=777,uid=${UID},gid=${GID},nodev,nosuid,noexec,size=2G
+      - /ramdisk:mode=777,uid=${UID},gid=${GID},nodev,nosuid,noexec,size=1500M
     user: ${UID}:${GID}
     group_add:
       - 995  # debug
