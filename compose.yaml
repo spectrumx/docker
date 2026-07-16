@@ -61,6 +61,7 @@ services:
     ulimits:
       rtprio: 99
     environment:
+      - CUPY_GPU_MEMORY_LIMIT=25%
       - HOLOSCAN_EXECUTOR_LOG_LEVEL=WARN
       - HOLOSCAN_LOG_LEVEL=INFO
       - HOLOSCAN_LOG_FORMAT=DEFAULT
