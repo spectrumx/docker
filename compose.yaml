@@ -57,6 +57,7 @@ services:
     image: ghcr.io/ryanvolz/holoscan_recorder/mep:latest
     container_name: recorder
     cap_add:
+      - SYS_ADMIN
       - SYS_NICE
     ulimits:
       rtprio: 99
